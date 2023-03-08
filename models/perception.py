@@ -1,16 +1,13 @@
+from types import MappingProxyType
+
 import torch.optim
-import numpy as np
+from pytorch_lightning import LightningModule
 from torch.nn.functional import mse_loss
-from torch.distributions.kl import kl_divergence
 from torch.utils.data import DataLoader
 from typing_extensions import Required
-from types import MappingProxyType
-from annealing_schedules import step_schedule, ramp_schedule
+
+from models.vae_1d import VAE, RecurrentVAE, MultiObsVAE
 from utils import training
-from models.vae_1d import VAE, RecurrentVAE, MultiObsVAE, TwoLatentMultiObsVAE
-from pytorch_lightning import LightningModule
-from utils.data import ActiveSensingDataset, get_mnist_data
-from utils.training import train_perception_model
 
 DEFAULT_VAE1_PARAMS = MappingProxyType({
 
