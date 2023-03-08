@@ -30,7 +30,7 @@ class ActionStrategy:
         msds = ((actions_rep - action_table_full) ** 2).sum(dim=-1)
         inds = torch.argmin(msds, dim=-1)
 
-        return self.action_grid.table[inds]
+        return self.action_grid.table.to(self.perception_model.device)[inds]
 
     def train(self, mode: bool = True):     # relevant only for trainable strategies
         pass
@@ -52,13 +52,13 @@ class ActionNetworkStrategy(ActionStrategy):
         super().__init__(*args)
 
         # construct the action network
-        self.action_net = ActionNetwork(input_dim=self.perception_model.z_dim,
+        self.action_net = ActionNetwork(input_dim=self.perception_model.s_dim,
                                         action_dim=self.perception_model.action_dim,
                                         layers=layers,
                                         out_dist=out_dist,
                                         num_actions=self.action_grid.num_actions,
                                         action_table=self.action_grid.table,
-                                        lr=lr)
+                                        lr=lr).to(self.perception_model.device)
 
         # strategy is initialized into training mode
         self._training = True
@@ -103,7 +103,7 @@ class ActionNetworkStrategy(ActionStrategy):
             # reset the perception model
             self.perception_model.reset_rnn_states()
             loss = torch.sum(-score_action(self.perception_model,
-                                           states.detach(), actions.detach(),
+                                           states, actions,
                                            action, n_samples=1))
 
             # step the optimizer
@@ -111,9 +111,9 @@ class ActionNetworkStrategy(ActionStrategy):
             loss.backward()
             self.action_net.optimizer.step()
 
-            return action
+            return action.detach()
 
-        return self._select_action(states, actions)
+        return self._select_action(states, actions).detach()
 
     def state_dict(self):
         return self.action_net.state_dict()

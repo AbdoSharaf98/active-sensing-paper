@@ -10,7 +10,7 @@ from nets import DecisionNetwork
 from colorama import Fore
 
 
-class ActiveSensor(nn.Module):
+class BayesianActiveSensor(nn.Module):
     """ Full active sensor model """
 
     def __init__(self, env: ActiveSensingEnv,
@@ -100,12 +100,12 @@ class ActiveSensor(nn.Module):
         actions[:, 0, :] = torch.tensor(state[:, -2:]).to(self.device)  # initial action
 
         # put the actor in training mode based on whether we are validating
-        self.actor.train(~validation)
+        self.actor.train(not validation)
 
         # go through the allowed number of steps
         for t in range(self.env.n_samples):
             # select action
-            action = self.actor.select_action(states[:, :t + 1, :], actions[:, :t + 1, :])
+            action = self.actor.select_action(states[:, :t + 1, :].detach(), actions[:, :t + 1, :].detach())
 
             # step the environment
             state = self.env.step(action.detach().cpu().numpy())[0]
@@ -164,7 +164,7 @@ class ActiveSensor(nn.Module):
             # optimize the decider
             self.decider.optimizer.zero_grad()
             decision_loss.backward()
-            self.decider_optim.step()
+            self.decider.optimizer.step()
 
             # optimize the perception model
             p_loss.backward()
@@ -221,9 +221,8 @@ class ActiveSensor(nn.Module):
         # initialize array to track training and validation accuracies
         max_val_acc = 0
 
-        # no of training and validation batches
+        # no of training batches
         num_train = len(self.env.train_loader)
-        num_valid = len(self.env.valid_loader)
 
         # define the beta schedule if it's not given
         if beta_sched is None:
@@ -251,7 +250,7 @@ class ActiveSensor(nn.Module):
                 # print progress
                 print(Fore.YELLOW + f'[train] Episode {epoch + 1} ({batch_num + 1}/{num_train}):\t \033[1mSCORE\033['
                                     f'0m = {accuracy:0.3f}'
-                      + Fore.YELLOW + f' \t \033[1mAVG SCORE\033[0m = {train_accs[:epoch + 1].mean():0.3f}')
+                      + Fore.YELLOW + f' \t \033[1mAVG SCORE\033[0m = {train_accs[:epoch + 1].mean():0.3f}', end='\r')
 
                 # log
                 if total_updates % log_interval == 0:
@@ -283,6 +282,8 @@ class ActiveSensor(nn.Module):
 
                 # step the number of total updates
                 total_updates += 1
+            # print a new line for the next epoch
+            print('')
 
         # # after training is done, use the best model to perform a train and validation pass
         # load the best state dict

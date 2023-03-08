@@ -64,7 +64,7 @@ class ActionNetwork(nn.Module):
 
         # construct the base network
         if layers is None:
-            layers = []
+            layers = [256]
         base_layers = [input_dim] + layers
         self.base_net = create_ff_network(base_layers, h_activation='none', out_activation='none')
 

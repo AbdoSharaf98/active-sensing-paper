@@ -24,12 +24,10 @@ ENV_ID = 'ActiveSensingMNIST-v0'
 
 gym.envs.register(ENV_ID, entry_point='envs.entry_points.active_sensing:ActiveSensingEnv')
 
-BASE_ENV = gym.make(ENV_ID, **DEFAULT_CONFIG)
-
 
 # < ---------------------------------  env maker   ------------------------------------- >
-def make_env(env_config=None, env=BASE_ENV):
+def make_env(env_config=None):
     if env_config is None:
-        return env
+        return gym.make(ENV_ID, **DEFAULT_CONFIG)
     else:
         return gym.make(ENV_ID, **env_config)
