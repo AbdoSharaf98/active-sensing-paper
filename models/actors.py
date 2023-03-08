@@ -32,7 +32,13 @@ class ActionStrategy:
 
         return self.action_grid.table[inds]
 
+    def train(self, mode: bool = True):     # relevant only for trainable strategies
+        pass
+
     def select_action(self, states, actions):  # needs to be implemented by subclasses
+        raise NotImplementedError
+
+    def state_dict(self):     # for checkpointing purposes
         raise NotImplementedError
 
 
@@ -109,6 +115,9 @@ class ActionNetworkStrategy(ActionStrategy):
 
         return self._select_action(states, actions)
 
+    def state_dict(self):
+        return self.action_net.state_dict()
+
 
 class DirectEvaluationStrategy(ActionStrategy):
     """ selects action by directly evaluating the BAS score for every action on the grid """
@@ -157,10 +166,18 @@ class DirectEvaluationStrategy(ActionStrategy):
 
         return best_acts
 
+    def state_dict(self):
+        return "DirectEvaluationStrategy"
+
 
 class RandomActionStrategy(ActionStrategy):
     """ selects a random action from the action grid """
     def select_action(self, states, actions=None):
         action_inds = np.random.randint(0, high=self.action_grid.num_actions, size=(states.shape[0],))
         return torch.tensor(self.action_grid.get_action(action_inds)).to(states.device)
+
+    def state_dict(self):
+        return "RandomActionStrategy"
+
+
 

@@ -50,8 +50,8 @@ class PerceptionModel(LightningModule):
 
         self.save_hyperparameters()
 
-        self.latent1_dim = z_dim
-        self.latent2_dim = s_dim
+        self.z_dim = z_dim
+        self.s_dim = s_dim
         self.action_dim = action_dim
         self.obs_dim = obs_dim
         self.lr = lr
@@ -103,11 +103,13 @@ class PerceptionModel(LightningModule):
     def trainer(self, trainer):
         self._trainer = trainer
 
+    def parameter_list(self):
+        return list(self.vae2.parameters()) + int(self.use_latents) * list(self.vae1.parameters())
+
     def configure_optimizers(self, lr=None):
         if lr is None:
             lr = self.lr
-        optim_params = list(self.vae2.parameters()) + int(self.use_latents) * list(self.vae.parameters())
-        return torch.optim.Adam(optim_params, lr=lr)
+        return torch.optim.Adam(self.parameter_list(), lr=lr)
 
     def forward(self, obs, locations):
 
@@ -124,7 +126,7 @@ class PerceptionModel(LightningModule):
         # recons = None
         z_latents = None
         if self.use_latents:
-            _, z_latents, z_posterior = self.vae(obs)
+            _, z_latents, z_posterior = self.vae1(obs)
             vae2_input = z_latents
 
         # pass through the second vae
@@ -134,7 +136,7 @@ class PerceptionModel(LightningModule):
         z_recons = None
         if self.use_latents:
             z_recons = z_prior.mu
-            recons = self.vae.decode(z_prior.sample()).squeeze()
+            recons = self.vae1.decode(z_prior.sample()).squeeze()
         else:
             recons = z_prior.mu
 
