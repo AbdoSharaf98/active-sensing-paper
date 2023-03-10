@@ -30,7 +30,7 @@ class ActionStrategy:
         msds = ((actions_rep - action_table_full) ** 2).sum(dim=-1)
         inds = torch.argmin(msds, dim=-1)
 
-        return self.action_grid.table.to(self.perception_model.device)[inds]
+        return self.action_grid.table.to(action.device)[inds]
 
     def train(self, mode: bool = True):     # relevant only for trainable strategies
         pass
@@ -145,7 +145,7 @@ class DirectEvaluationStrategy(ActionStrategy):
         candidate_actions = action_table.unsqueeze(1).repeat_interleave(batch_size, dim=1)
 
         # tensor that will hold the scores
-        scores = torch.zeros((batch_size, num_actions.item())) - torch.inf
+        scores = torch.zeros((batch_size, num_actions)) - torch.inf
 
         # find the actions near the inferred global location
         num_eval = math.floor(self.eval_frac * num_actions)
@@ -174,7 +174,7 @@ class RandomActionStrategy(ActionStrategy):
     """ selects a random action from the action grid """
     def select_action(self, states, actions=None):
         action_inds = np.random.randint(0, high=self.action_grid.num_actions, size=(states.shape[0],))
-        return torch.tensor(self.action_grid.get_action(action_inds)).to(states.device)
+        return torch.tensor(self.action_grid.get_action(action_inds)).float().to(states.device)
 
     def state_dict(self):
         return "RandomActionStrategy"

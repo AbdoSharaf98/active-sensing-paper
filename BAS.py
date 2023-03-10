@@ -13,6 +13,7 @@ class ActionGrid:
         if grid_size[1] % 2 == 0:
             grid_size[1] -= 1
 
+        self.grid_size = grid_size
         self.num_actions = grid_size[0] * grid_size[1]
 
         # get the individual action coordinates

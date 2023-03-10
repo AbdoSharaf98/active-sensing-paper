@@ -4,10 +4,11 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from envs.entry_points.active_sensing import ActiveSensingEnv
-from models.actors import ActionStrategy, ActionNetworkStrategy
+from models.actors import ActionStrategy, ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
 from models.perception import PerceptionModel
 from nets import DecisionNetwork
 from colorama import Fore
+from utils.training import PerceptionModelTrainer
 
 
 class BayesianActiveSensor(nn.Module):
@@ -18,7 +19,7 @@ class BayesianActiveSensor(nn.Module):
                  actor: ActionStrategy,
                  decider: DecisionNetwork,
                  log_dir: str,
-                 checkpoint_dir: str,
+                 checkpoint_dir: str = None,
                  device: str = 'cuda',
                  decider_input: str = 'perception'):
         """
@@ -49,9 +50,18 @@ class BayesianActiveSensor(nn.Module):
         self.logger = SummaryWriter(log_dir=log_dir)
 
         # checkpointing dir
-        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir if checkpoint_dir is not None else log_dir
         if not os.path.isdir(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
+
+        # in case we need to warm-up with random actions
+        self._random_strategy = None
+
+    @property
+    def random_strategy(self):
+        if self._random_strategy is None:
+            return RandomActionStrategy(self.perception_model, action_grid_size=self.actor.action_grid.grid_size)
+        return self._random_strategy
 
     def save_checkpoint(self, save_name: str, loss_dict: dict):
 
@@ -77,7 +87,8 @@ class BayesianActiveSensor(nn.Module):
 
     def sensing_loop(self, validation: bool = False,
                      with_batch: torch.Tensor = None,
-                     entropy_thresh: float = None):
+                     entropy_thresh: float = None,
+                     random_action: bool = False):
         """
         :param entropy_thresh: threshold on the uncertainty used to stop sensing
         :param validation: whether to use a validation batch from the environment
@@ -105,7 +116,10 @@ class BayesianActiveSensor(nn.Module):
         # go through the allowed number of steps
         for t in range(self.env.n_samples):
             # select action
-            action = self.actor.select_action(states[:, :t + 1, :].detach(), actions[:, :t + 1, :].detach())
+            if not random_action:
+                action = self.actor.select_action(states[:, :t + 1, :].detach(), actions[:, :t + 1, :].detach())
+            else:
+                action = self.random_strategy.select_action(states)
 
             # step the environment
             state = self.env.step(action.detach().cpu().numpy())[0]
@@ -140,9 +154,10 @@ class BayesianActiveSensor(nn.Module):
 
         return decision_dist, decision
 
-    def training_step(self, entropy_thresh=None, beta=0.1, update=True):
+    def training_step(self, entropy_thresh=None, beta=0.1, update=True, random_action=False):
 
-        states, actions = self.sensing_loop(validation=False, entropy_thresh=entropy_thresh)
+        states, actions = self.sensing_loop(validation=False, entropy_thresh=entropy_thresh,
+                                            random_action=random_action)
 
         # make a decision
         decision_dist, decision = self.decide(states, actions)
@@ -162,9 +177,10 @@ class BayesianActiveSensor(nn.Module):
             self.perception_model.manual_optimizer.zero_grad()
 
             # optimize the decider
-            self.decider.optimizer.zero_grad()
-            decision_loss.backward()
-            self.decider.optimizer.step()
+            if not random_action:
+                self.decider.optimizer.zero_grad()
+                decision_loss.backward()
+                self.decider.optimizer.step()
 
             # optimize the perception model
             p_loss.backward()
@@ -203,8 +219,10 @@ class BayesianActiveSensor(nn.Module):
               entropy_thresh: float = None,
               log_every: float = 5,
               validate_every: float = 3,
-              beta_sched: np.ndarray = None):
+              beta_sched: np.ndarray = None,
+              num_random_epochs: int = 0):
         """
+        :param num_random_epochs:
         :param beta_sched:
         :param num_epochs: number of epochs to train for
         :param entropy_thresh: entropy threshold to control when the agent stops sensing before using max samples
@@ -240,17 +258,21 @@ class BayesianActiveSensor(nn.Module):
             # will be used to calculate avg training accuracy at the end of each epoch
             train_accs = torch.zeros((num_train,))
 
+            rnd_act = epoch < num_random_epochs
+
             for batch_num in range(num_train):
 
                 accuracy, decision_loss, perception_losses, steps = self.training_step(entropy_thresh,
-                                                                                       beta_sched[epoch])
+                                                                                       beta_sched[epoch],
+                                                                                       random_action=rnd_act)
                 # store accuracy to calculate running average
-                train_accs[epoch] = accuracy
+                train_accs[batch_num] = accuracy
 
                 # print progress
                 print(Fore.YELLOW + f'[train] Episode {epoch + 1} ({batch_num + 1}/{num_train}):\t \033[1mSCORE\033['
                                     f'0m = {accuracy:0.3f}'
-                      + Fore.YELLOW + f' \t \033[1mAVG SCORE\033[0m = {train_accs[:epoch + 1].mean():0.3f}', end='\r')
+                      + Fore.YELLOW + f' \t \033[1mAVG SCORE\033[0m = {train_accs[:batch_num + 1].mean():0.3f}',
+                      end='\r')
 
                 # log
                 if total_updates % log_interval == 0:
@@ -262,7 +284,7 @@ class BayesianActiveSensor(nn.Module):
                     self.logger.add_scalar('train/steps', steps, total_updates)
 
                 # validate
-                if total_updates % validate_interval == 0:
+                if (total_updates % validate_interval == 0) and (not rnd_act):
                     avg_val_accuracy, avg_val_loss, avg_val_steps = self.validation_step(entropy_thresh)
 
                     # checkpoint if max val acc has been exceeded

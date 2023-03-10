@@ -40,6 +40,7 @@ class ActiveSensingEnv(gym.Env, ABC):
         self.num_classes = num_classes
         self.num_foveated_patches = num_foveated_patches
         self.fovea_scale = fovea_scale
+        self.num_channels = num_channels
 
         if self.batch_size == -1:  # -1 indicates use all training data
             self.batch_size = len(dataset) - int(np.floor(valid_frac * len(dataset)))
