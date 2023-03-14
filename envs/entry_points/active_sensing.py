@@ -14,7 +14,7 @@ class ActiveSensingEnv(gym.Env, ABC):
     def __init__(self, n_samples: Optional[int],
                  batch_size: Optional[int],
                  sample_dim: Optional[int],
-                 dataset: Dataset,
+                 dataset: tuple[Dataset, Dataset],          # (train_dataset, test_dataset)
                  num_classes: int,
                  num_foveated_patches: int = 1,
                  fovea_scale=2,
@@ -43,12 +43,13 @@ class ActiveSensingEnv(gym.Env, ABC):
         self.num_channels = num_channels
 
         if self.batch_size == -1:  # -1 indicates use all training data
-            self.batch_size = len(dataset) - int(np.floor(valid_frac * len(dataset)))
+            self.batch_size = len(dataset[0]) - int(np.floor(valid_frac * len(dataset[0])))
 
         self.dataset = dataset
         self._set_data_loaders(valid_frac, num_workers)
         self.train_iterator = iter(self.train_loader)
         self.valid_iterator = iter(self.valid_loader)
+        self.test_iterator = iter(self.test_loader)
 
         # define the observation space
         obs_shape = (self.batch_size, self.num_foveated_patches * num_channels * sample_dim ** 2 + 2)
@@ -68,7 +69,7 @@ class ActiveSensingEnv(gym.Env, ABC):
 
     def _set_data_loaders(self, valid_frac=0.1, num_workers=4):
 
-        dsize = len(self.dataset)
+        dsize = len(self.dataset[0])
         indices = list(range(dsize))
         split = int(np.floor(valid_frac * dsize))
         np.random.shuffle(indices)
@@ -81,34 +82,46 @@ class ActiveSensingEnv(gym.Env, ABC):
         valid_sampler = SubsetRandomSampler(valid_idx)
 
         self.train_loader = torch.utils.data.DataLoader(
-            self.dataset,
+            self.dataset[0],
             batch_size=self.batch_size,
             sampler=train_sampler,
             num_workers=num_workers
         )
 
         self.valid_loader = torch.utils.data.DataLoader(
-            self.dataset,
+            self.dataset[0],
             batch_size=self.val_batch_size,
             sampler=valid_sampler,
             num_workers=num_workers
         )
 
-    def get_next_batch(self, validation=False):
+        self.test_loader = torch.utils.data.DataLoader(
+            self.dataset[1],
+            batch_size=self.val_batch_size,
+            shuffle=True,
+            num_workers=num_workers
+        )
 
-        if not validation:
-            try:
-                batch = next(self.train_iterator)
-            except StopIteration:
-                self.train_iterator = iter(self.train_loader)
-                batch = next(self.train_iterator)
-        else:
+    def get_next_batch(self, validation=False, testing=False):
+
+        if validation:
             try:
                 batch = next(self.valid_iterator)
             except StopIteration:
                 self.valid_iterator = iter(self.valid_loader)
                 batch = next(self.valid_iterator)
-
+        elif testing:
+            try:
+                batch = next(self.test_iterator)
+            except StopIteration:
+                self.test_iterator = iter(self.test_loader)
+                batch = next(self.test_iterator)
+        else:
+            try:
+                batch = next(self.train_iterator)
+            except StopIteration:
+                self.train_iterator = iter(self.train_loader)
+                batch = next(self.train_iterator)
         return batch
 
     @staticmethod
@@ -151,10 +164,10 @@ class ActiveSensingEnv(gym.Env, ABC):
 
         return patches.view(patches.shape[0], -1)
 
-    def reset(self, validation=False, with_batch=None):
+    def reset(self, validation=False, testing=False, with_batch=None):
 
         # get the samples
-        self.current_batch = self.get_next_batch(validation)
+        self.current_batch = self.get_next_batch(validation, testing)
 
         bsz = len(self.current_batch[0])
         loc = torch.FloatTensor(bsz, 2).uniform_(-1, 1)

@@ -113,14 +113,12 @@ def get_mnist_data(data_dir=None,
 
     # transforms
     normalize = transforms.Normalize((0.1307,), (0.3081,))
-    data_transformer = transforms.Compose([transforms.ToTensor(), normalize])
+    data_transformer = transforms.Compose([transforms.ToTensor(), normalize]) if transform else None
 
-    if transform:
-        dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
-    else:
-        dataset = datasets.MNIST(root=data_dir, train=True, download=True)
+    train_dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+    test_dataset = datasets.MNIST(root=data_dir, train=False, download=True, transform=data_transformer)
 
-    t = torch.cat([x for (x, y) in dataset])
+    t = torch.cat([xn for (xn, _) in train_dataset] + [xt for (xt, _) in test_dataset])
     v_min = torch.min(t)
 
     if data_version == 'translated':
@@ -130,9 +128,55 @@ def get_mnist_data(data_dir=None,
             normalize,
             translator
         ])
-        dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+        train_dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+        test_dataset = datasets.MNIST(root=data_dir, train=False, download=True, transform=data_transformer)
 
-    return dataset
+    return train_dataset, test_dataset
+
+
+def get_fashion_mnist(data_dir=None, transform=True):
+    if data_dir is None:
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(project_dir, 'data', 'fashion_mnist')
+
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir)
+
+    # transforms
+    normalize = transforms.Normalize((0.5,), (0.5,))
+    data_transformer = transforms.Compose([transforms.ToTensor(), normalize]) if transform else None
+
+    train_dataset = datasets.FashionMNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+    test_dataset = datasets.FashionMNIST(root=data_dir, train=False, download=True, transform=data_transformer)
+
+    return train_dataset, test_dataset
+
+
+def collect_data(env, actor, device='cuda'):
+    states = torch.zeros(env.batch_size, env.n_samples + 1, env.observation_space.shape[-1])
+    actions = torch.zeros(env.batch_size, env.n_samples + 1, env.action_space.shape[-1])
+
+    state = env.reset()
+    states[:, 0, :] = torch.tensor(state)
+    actions[:, 0, :] = torch.tensor(state[:, -2:]).to(device)  # initial action
+    for t in range(env.n_samples):
+        # select action randomly
+        action = actor.select_action(states[:, :t + 1, :].detach(), actions[:, :t + 1, :].detach())
+
+        # step the environment
+        state = env.step(action.detach().cpu().numpy())[0]
+
+        # store
+        states[:, t + 1, :] = torch.tensor(state).to(device)
+        actions[:, t + 1, :] = action
+
+    # dummy decision to get the true labels
+    _, _, _, infos = env.step(np.zeros((env.batch_size,)))
+
+    data_dict = {'obs': states, 'locations': actions, 'true_labels': infos['true_labels'],
+                 'one_hot_labels': infos['one_hot_labels']}
+
+    return data_dict
 
 
 def train_test_split(data, train_size=None, test_size=None):

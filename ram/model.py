@@ -113,6 +113,7 @@ class RecurrentAttentionModel(nn.Module):
                 current timestep `t`. Else, the core network returns the
                 hidden state vector for the next timestep `t+1` and the
                 location vector for the next timestep `t+1`.
+            random_action: whether to return a random location for the next glimpse
         Returns:
             h_t: a 2D tensor of shape (B, hidden_size). The hidden
                 state vector for the current timestep `t`.
@@ -174,12 +175,6 @@ class RecurrentAttentionModel(nn.Module):
             # forward pass the model
             h_t, l_t, b_t, p = self.forward(x, l_t, h_t, random_action=random_action)
 
-            """
-            if random_action:
-                l_t = torch.FloatTensor(x.shape[0], 2).uniform_(-1, 1).to(self.device)
-                p = 0.25 * torch.ones_like(l_t).float().to(self.device)
-            """
-
             # store
             locs.append(l_t[0:9])
             baselines.append(b_t)
@@ -187,11 +182,7 @@ class RecurrentAttentionModel(nn.Module):
 
         # last iteration
         h_t, l_t, b_t, log_probas, p = self.forward(x, l_t, h_t, last=True, random_action=random_action)
-        """
-        if random_action:
-            l_t = torch.FloatTensor(x.shape[0], 2).uniform_(-1, 1).to(self.device)
-            p = 0.25 * torch.ones_like(l_t).float().to(self.device)
-        """
+
         log_pi.append(p)
         baselines.append(b_t)
         locs.append(l_t[0:9])

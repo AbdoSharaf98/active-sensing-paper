@@ -1,9 +1,14 @@
+"""
+A script for training the Recurrent Attention Model proposed in Mnih et al. https://arxiv.org/abs/1406.6247
+"""
+
+
 import torch
 import os
 from copy import deepcopy
 
 from envs.active_sensing import mnist_active_sensing
-from models.actors import RandomActionStrategy
+from models.action import RandomActionStrategy
 from utils.data import get_mnist_data
 
 from ram.model import RecurrentAttentionModel

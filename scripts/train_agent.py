@@ -1,15 +1,19 @@
+"""
+A script for training the Bayesian Active Sensor
+"""
+
 import torch
 import os
 from copy import deepcopy
 import numpy as np
 
 from envs.active_sensing import mnist_active_sensing
-from utils.data import get_mnist_data
+from utils.data import get_mnist_data, get_fashion_mnist
 
 from models import perception
 from models.perception import PerceptionModel
 
-from models.actors import ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
+from models.action import ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
 
 from nets import DecisionNetwork, FFDecisionNetwork, RNNDecisionNetwork
 
@@ -21,42 +25,51 @@ project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # create the environment
 config = deepcopy(mnist_active_sensing.DEFAULT_CONFIG)
-config['batch_size'] = 80
+config['batch_size'] = 64
 config['val_batch_size'] = 1000
-config['n_samples'] = n = 3
+config['n_samples'] = n = 4
 config['sample_dim'] = d = 8
 config['num_foveated_patches'] = nfov = 1
 config['fovea_scale'] = fovsc = 1
 config['num_workers'] = 0
 config['valid_frac'] = 0.1
-config['dataset'] = get_mnist_data()
+config['dataset'] = get_fashion_mnist()
 env = mnist_active_sensing.make_env(config)
 
 # create or load the perception model
-z_dim = 32
-s_dim = 64
-d_action = 2
-d_obs = env.observation_space.shape[-1]
+model_dir = f"../perception_runs/perception_fashionMNIST_n=5_d=8_nfov=1_fovsc=1/last.ckpt"
 
-# create the perception model
-vae1_params = perception.DEFAULT_VAE1_PARAMS.copy()
-vae1_params['type'] = 'mlp'
-vae1_params['layers'] = [256, 256]
+if model_dir is None:
+    z_dim = 32
+    s_dim = 64
+    d_action = 2
+    d_obs = env.observation_space.shape[-1]
 
-vae2_params = {
-    'layers': [256, 256],
-    'rnn_hidden_size': 512,
-    'rnn_num_layers': 1
-}
+    # create the perception model
+    vae1_params = perception.DEFAULT_VAE1_PARAMS.copy()
+    vae1_params['type'] = 'mlp'
+    vae1_params['layers'] = [256, 256]
 
-perception_model = PerceptionModel(z_dim, s_dim, d_action, d_obs, vae1_params=vae1_params,
-                                   vae2_params=vae2_params, lr=0.001, use_latents=True).to(device)
+    vae2_params = {
+        'layers': [256, 256],
+        'rnn_hidden_size': 512,
+        'rnn_num_layers': 1
+    }
+
+    perception_model = PerceptionModel(z_dim, s_dim, d_action, d_obs, vae1_params=vae1_params,
+                                       vae2_params=vae2_params, lr=0.001, use_latents=True).to(device)
+else:
+    perception_model = PerceptionModel.load_from_checkpoint(model_dir).to(device)
 
 # create the actor
+action_strategy = 'action_network'
 action_grid_size = (9, 9)
-actor = ActionNetworkStrategy(perception_model, action_grid_size, layers=[32, 16], lr=0.001, out_dist='gaussian',
-                              action_std=0.05)
-#actor = DirectEvaluationStrategy(perception_model, action_grid_size)
+
+if action_strategy == 'action_network':
+    actor = ActionNetworkStrategy(perception_model, action_grid_size, layers=[32, 16], lr=0.001, out_dist='gaussian',
+                                  action_std=0.05)
+else:
+    actor = DirectEvaluationStrategy(perception_model, action_grid_size)
 
 
 # create the decider
@@ -68,7 +81,7 @@ decider = FFDecisionNetwork(perception_model.s_dim,
                             lr=0.001).to(device)
 
 # create the active sensor model
-log_dir = f'../runs/bas_perception_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_ActionNetwork'
+log_dir = f'../runs/bas_perception_fashionMNIST_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{action_strategy}'
 active_sensor = BayesianActiveSensor(env, perception_model, actor, decider,
                                      log_dir=log_dir, checkpoint_dir=log_dir,
                                      device=device, decider_input=decision_mode)

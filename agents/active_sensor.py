@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from envs.entry_points.active_sensing import ActiveSensingEnv
-from models.actors import ActionStrategy, ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
+from models.action import ActionStrategy, ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
 from models.perception import PerceptionModel
 from nets import DecisionNetwork
 from colorama import Fore
@@ -86,6 +86,7 @@ class BayesianActiveSensor(nn.Module):
         self.decider.load_state_dict(chkpt_dict['decider'])
 
     def sensing_loop(self, validation: bool = False,
+                     testing: bool = False,
                      with_batch: torch.Tensor = None,
                      entropy_thresh: float = None,
                      random_action: bool = False):
@@ -93,6 +94,8 @@ class BayesianActiveSensor(nn.Module):
         :param entropy_thresh: threshold on the uncertainty used to stop sensing
         :param validation: whether to use a validation batch from the environment
         :param with_batch: specific batch to run the sensing loop with
+        :param testing:
+        :param random_action:
         :return:
         """
 
@@ -100,7 +103,7 @@ class BayesianActiveSensor(nn.Module):
         self.perception_model.reset_rnn_states()
 
         # reset the environment
-        state = self.env.reset(validation=validation, with_batch=with_batch)
+        state = self.env.reset(validation=validation, testing=testing, with_batch=with_batch)
 
         # construct tensor to hold episode data
         bsz = len(self.env.current_batch[0])
@@ -190,15 +193,17 @@ class BayesianActiveSensor(nn.Module):
 
         return accuracy, decision_loss, (p_loss, rec_loss, z_kl_loss, s_kl_loss), states.shape[1] - 1
 
-    def validation_step(self, entropy_thresh=None):
+    def validation_step(self, entropy_thresh=None, testing=False):
         # NOTE: if the validation batch is too large & we are running on cuda, it will run out of memory
-        num_valid = len(self.env.valid_loader)
+        num_valid = len(self.env.valid_loader if not testing else self.env.test_loader)
         val_accs = torch.zeros((num_valid,))
         val_losses = torch.zeros((num_valid,))
         val_steps = torch.zeros((num_valid,))
         for v in range(num_valid):
             # sense
-            val_states, val_actions = self.sensing_loop(validation=True, entropy_thresh=entropy_thresh)
+            val_states, val_actions = self.sensing_loop(validation=not testing,
+                                                        testing=testing,
+                                                        entropy_thresh=entropy_thresh)
             # decide
             val_decision_dist, val_decision = self.decide(val_states, val_actions)
             # get validation accuracy
@@ -238,6 +243,7 @@ class BayesianActiveSensor(nn.Module):
 
         # initialize array to track training and validation accuracies
         max_val_acc = 0
+        max_tst_acc = 0
 
         # no of training batches
         num_train = len(self.env.train_loader)
@@ -285,7 +291,10 @@ class BayesianActiveSensor(nn.Module):
 
                 # validate
                 if (total_updates % validate_interval == 0) and (not rnd_act):
-                    avg_val_accuracy, avg_val_loss, avg_val_steps = self.validation_step(entropy_thresh)
+                    avg_val_accuracy, avg_val_loss, avg_val_steps = self.validation_step(testing=False,
+                                                                                         entropy_thresh=entropy_thresh)
+                    avg_tst_accuracy, avg_tst_loss, avg_tst_steps = self.validation_step(testing=True,
+                                                                                         entropy_thresh=entropy_thresh)
 
                     # checkpoint if max val acc has been exceeded
                     if avg_val_accuracy >= max_val_acc:
@@ -293,14 +302,20 @@ class BayesianActiveSensor(nn.Module):
                         best_model_checkpoint = self.save_checkpoint(
                             f'bestModel_epoch={total_updates / num_updates_per_epoch:0.2f}',
                             {'accuracy': avg_val_accuracy, 'decision_loss': avg_val_loss})
+                    max_tst_acc = max(max_tst_acc, avg_tst_accuracy)
 
-                    print(Fore.GREEN + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
-                          + Fore.GREEN + f' \t \033[1mMAX SCORE\033[0m = {max_val_acc:0.3f}')
+                    print(Fore.LIGHTGREEN_EX + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
+                          + Fore.LIGHTGREEN_EX + f' \t \033[1mMAX SCORE\033[0m = {max_val_acc:0.3f}')
+                    print(Fore.GREEN + f'[test] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_tst_accuracy:0.3f}'
+                          + Fore.GREEN + f' \t \033[1mMAX SCORE\033[0m = {max_tst_acc:0.3f}')
 
                     # log
                     self.logger.add_scalar('valid/accuracy', avg_val_accuracy, total_updates)
                     self.logger.add_scalar('valid/decision_loss', avg_val_loss, total_updates)
                     self.logger.add_scalar('valid/steps', avg_val_steps, total_updates)
+                    self.logger.add_scalar('test/accuracy', avg_tst_accuracy, total_updates)
+                    self.logger.add_scalar('test/decision_loss', avg_tst_loss, total_updates)
+                    self.logger.add_scalar('test/steps', avg_tst_steps, total_updates)
 
                 # step the number of total updates
                 total_updates += 1
