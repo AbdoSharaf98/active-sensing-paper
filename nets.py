@@ -51,7 +51,7 @@ class ActionNetwork(nn.Module):
     """
 
     def __init__(self, input_dim, action_dim, layers=None, out_dist='gaussian',
-                 num_actions=None, action_table=None, lr=0.001):
+                 num_actions=None, action_table=None, lr=0.001, action_std=0.05):
         """
         :param input_dim: dimensionality of the input to the network
         :param action_dim: dimensionality of the action
@@ -61,6 +61,8 @@ class ActionNetwork(nn.Module):
         """
 
         super().__init__()
+
+        self.std = action_std
 
         # construct the base network
         if layers is None:
@@ -100,7 +102,7 @@ class ActionNetwork(nn.Module):
             action_dist = Concrete(action_probs, self.action_table)
         else:
             action_mu = self.dist_net(y)
-            action_dist = Gaussian(action_mu, torch.ones_like(action_mu).to(action_mu.device))
+            action_dist = Gaussian(action_mu, self.std * torch.ones_like(action_mu).to(action_mu.device))
 
         return action_dist
 

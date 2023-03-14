@@ -14,7 +14,7 @@ project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # create the environment
 config = deepcopy(mnist_active_sensing.DEFAULT_CONFIG)
-config['batch_size'] = 64
+config['batch_size'] = 80
 config['val_batch_size'] = 1000
 config['n_samples'] = n = 3
 config['sample_dim'] = d = 8
@@ -26,16 +26,16 @@ config['dataset'] = get_mnist_data()
 env = mnist_active_sensing.make_env(config)
 
 # create the model
-h_g = 64
-h_l = 64
-hidden_size = 32
-std = 0.01
+h_g = 32
+h_l = 32
+hidden_size = 64
+std = 1.0
 M = 1
 log_dir = '../runs/ram_n=4_d=8_nfov=1_fovsc=1'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-random_strategy = RandomActionStrategy(None, action_grid_size=(9, 9))
+random_strategy = RandomActionStrategy(None, action_grid_size=(15, 15))
 ram_model = RecurrentAttentionModel(env, h_g, h_l, std, hidden_size, random_strategy=random_strategy,
-                                    log_dir=log_dir)
+                                    log_dir=log_dir, discrete_loc=True)
 
 # train
 n_epochs = 200

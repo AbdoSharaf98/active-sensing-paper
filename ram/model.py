@@ -29,7 +29,9 @@ class RecurrentAttentionModel(nn.Module):
             random_strategy,
             checkpoint_dir=None,
             lr=0.001,
-            device='cuda'):
+            device='cuda',
+            discrete_loc=False
+    ):
         """Constructor.
         Args:
           h_g: hidden layer size of the fc layer for `phi`.
@@ -54,7 +56,10 @@ class RecurrentAttentionModel(nn.Module):
 
         self.sensor = modules.GlimpseNetwork(h_g, h_l, g, k, s, c)
         self.rnn = modules.CoreNetwork(h_g + h_l, hidden_size)
-        self.locator = modules.LocationNetwork(hidden_size, 2, std)
+        if not discrete_loc:
+            self.locator = modules.LocationNetwork(hidden_size, 2, std)
+        else:
+            self.locator = modules.DiscreteLocationNetwork(hidden_size, random_strategy.action_grid)
         self.classifier = modules.ActionNetwork(hidden_size, env.num_classes)
         self.baseliner = modules.BaselineNetwork(hidden_size, 1)
 
@@ -125,17 +130,11 @@ class RecurrentAttentionModel(nn.Module):
         g_t = self.sensor(x, l_t_prev)
         h_t = self.rnn(g_t, h_t_prev)
 
-        #if not random_action:
-        log_pi, l_t = self.locator(h_t)
-        #l_t_disc = self.random_strategy.quantize_action(l_t_cont)
-        #l_t = (l_t_disc - l_t_cont).detach() + l_t_cont
-
-        #else:
-        if random_action:
-            l_t = torch.clamp(torch.randn((x.shape[0], 2)), -1, 1).to(self.device)
-            #l_t = self.random_strategy.select_action(x)
-            #l_t = torch.FloatTensor(x.shape[0], 2).uniform_(-1, 1).to(self.device)
-            #log_pi = (1/self.random_strategy.action_grid.num_actions) * torch.ones_like(l_t).float().to(self.device)
+        if not random_action:
+            log_pi, l_t = self.locator(h_t)
+        else:
+            l_t = self.random_strategy.select_action(x)
+            log_pi = (1/self.random_strategy.action_grid.num_actions) * torch.ones_like(l_t).float().to(self.device)
         b_t = self.baseliner(h_t).squeeze()
 
         if last:

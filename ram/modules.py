@@ -1,4 +1,3 @@
-
 # *********************************************************************** #
 # Adapted from https://github.com/kevinzakka/recurrent-visual-attention
 # *********************************************************************** #
@@ -88,7 +87,7 @@ class Retina:
         # loop through mini-batch and extract patches
         patch = []
         for i in range(B):
-            patch.append(x[i, :, start[i, 1] : end[i, 1], start[i, 0] : end[i, 0]])
+            patch.append(x[i, :, start[i, 1]: end[i, 1], start[i, 0]: end[i, 0]])
         return torch.stack(patch)
 
     def denormalize(self, T, coords):
@@ -296,6 +295,26 @@ class LocationNetwork(nn.Module):
 
         # bound between [-1, 1]
         l_t = torch.clamp(l_t, -1, 1)
+
+        return log_pi, l_t
+
+
+class DiscreteLocationNetwork(nn.Module):
+
+    def __init__(self, input_size, action_grid):
+        super().__init__()
+
+        hid_size = input_size // 2
+        self.fc = nn.Sequential(nn.Linear(input_size, hid_size), nn.Linear(hid_size, action_grid.num_actions),
+                                nn.Softmax())
+
+        self.action_grid = action_grid
+
+    def forward(self, h_t):
+        probs = self.fc(h_t)
+        lt_inds = torch.argmax(probs, dim=-1)
+        l_t = self.action_grid.table.to(lt_inds.device)[lt_inds]
+        log_pi = torch.max(probs, dim=-1)[0]
 
         return log_pi, l_t
 

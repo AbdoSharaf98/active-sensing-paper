@@ -21,8 +21,8 @@ project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # create the environment
 config = deepcopy(mnist_active_sensing.DEFAULT_CONFIG)
-config['batch_size'] = 64
-config['val_batch_size'] = 60
+config['batch_size'] = 80
+config['val_batch_size'] = 1000
 config['n_samples'] = n = 3
 config['sample_dim'] = d = 8
 config['num_foveated_patches'] = nfov = 1
@@ -54,8 +54,9 @@ perception_model = PerceptionModel(z_dim, s_dim, d_action, d_obs, vae1_params=va
 
 # create the actor
 action_grid_size = (9, 9)
-# actor = ActionNetworkStrategy(perception_model, action_grid_size, layers=[32, 16], lr=0.001, out_dist='concrete')
-actor = DirectEvaluationStrategy(perception_model, action_grid_size)
+actor = ActionNetworkStrategy(perception_model, action_grid_size, layers=[32, 16], lr=0.001, out_dist='gaussian',
+                              action_std=0.05)
+#actor = DirectEvaluationStrategy(perception_model, action_grid_size)
 
 
 # create the decider
@@ -67,12 +68,12 @@ decider = FFDecisionNetwork(perception_model.s_dim,
                             lr=0.001).to(device)
 
 # create the active sensor model
-log_dir = f'../runs/bas_perception_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_DirectEvaluation'
+log_dir = f'../runs/bas_perception_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_ActionNetwork'
 active_sensor = BayesianActiveSensor(env, perception_model, actor, decider,
                                      log_dir=log_dir, checkpoint_dir=log_dir,
                                      device=device, decider_input=decision_mode)
 
 # train
 n_epochs = 200
-active_sensor.learn(num_epochs=n_epochs, beta_sched=np.ones((n_epochs,))*0.1, num_random_epochs=1,
-                    validate_every=0.05)
+active_sensor.learn(num_epochs=n_epochs, beta_sched=np.ones((n_epochs,))*0.1, num_random_epochs=0,
+                    validate_every=3)

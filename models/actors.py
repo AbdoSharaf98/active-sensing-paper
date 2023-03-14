@@ -47,7 +47,7 @@ class ActionNetworkStrategy(ActionStrategy):
     BAS strategy with a trainable action network
     """
 
-    def __init__(self, *args, layers=None, lr=0.001, out_dist='gaussian'):
+    def __init__(self, *args, layers=None, lr=0.001, out_dist='gaussian', action_std=0.05):
 
         super().__init__(*args)
 
@@ -58,7 +58,8 @@ class ActionNetworkStrategy(ActionStrategy):
                                         out_dist=out_dist,
                                         num_actions=self.action_grid.num_actions,
                                         action_table=self.action_grid.table,
-                                        lr=lr).to(self.perception_model.device)
+                                        lr=lr,
+                                        action_std=action_std).to(self.perception_model.device)
 
         # strategy is initialized into training mode
         self._training = True
@@ -84,7 +85,7 @@ class ActionNetworkStrategy(ActionStrategy):
         else:
             # in the gaussian case, the continuous action is the mean, and then it's quantized to one of
             # the actions on the grid
-            cont_action = action_dist.mu
+            cont_action = torch.clamp(action_dist.sample(), -1, 1)
             discrete_action = self.quantize_action(cont_action).to(actions.device)
 
             # copy the gradient to the discrete actions
