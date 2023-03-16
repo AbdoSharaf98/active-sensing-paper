@@ -126,7 +126,11 @@ class ActiveSensingEnv(gym.Env, ABC):
 
     @staticmethod
     def get_patch(images, locs, sz, flatten=True):
-        b, c, h, w = images.shape
+        if len(images.shape) > 3:
+            b, c, h, w = images.shape
+        else:
+            images = images.unsqueeze(1)
+            b, c, h, w = images.shape
 
         start_idx = (0.5 * ((locs + 1.0) * h)).long()
         end_idx = start_idx + sz
@@ -167,7 +171,10 @@ class ActiveSensingEnv(gym.Env, ABC):
     def reset(self, validation=False, testing=False, with_batch=None):
 
         # get the samples
-        self.current_batch = self.get_next_batch(validation, testing)
+        if with_batch is None:
+            self.current_batch = self.get_next_batch(validation, testing)
+        else:
+            self.current_batch = with_batch
 
         bsz = len(self.current_batch[0])
         loc = torch.FloatTensor(bsz, 2).uniform_(-1, 1)
@@ -257,3 +264,9 @@ class ActiveSensingEnv(gym.Env, ABC):
 
     def relinquish_views(self):
         self.current_step = self.n_samples
+
+    def reset_iterators(self):
+        self.train_iterator = iter(self.train_loader)
+        self.valid_iterator = iter(self.valid_loader)
+        self.test_iterator = iter(self.test_loader)
+
