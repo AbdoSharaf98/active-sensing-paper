@@ -127,7 +127,7 @@ class PerceptionModel(LightningModule):
             vae2_input = z_latents
 
         # pass through the second vae
-        z_prior, s_latent, s_posterior = self.vae2(vae2_input, locations)
+        z_prior, s_latent, s_posterior, h = self.vae2(vae2_input, locations)
 
         # compute the reconstructions of the z latents
         z_recons = None
@@ -137,14 +137,14 @@ class PerceptionModel(LightningModule):
         else:
             recons = z_prior.mu
 
-        return recons, z_recons, z_latents, z_posterior, z_prior, s_posterior
+        return recons, z_recons, z_latents, z_posterior, h, z_prior, s_posterior
 
     def _compute_losses(self, obs, locations, beta=1.0, rec_loss_scale=1.0):
         # TODO: in computing the KL losses (or expected log prob diffs) we can try drawing multiple samples and
         # TODO: averaging over them
 
         # forward the model
-        recons, z_recons, z_latents, z_posterior, z_prior, s_posterior = self.forward(obs, locations)
+        recons, z_recons, z_latents, z_posterior, h, z_prior, s_posterior = self.forward(obs, locations)
 
         # compute the reconstruction loss
         x_rec_loss = mse_loss(recons, obs, reduction='none').sum(dim=[-2, -1]).mean()
