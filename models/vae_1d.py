@@ -417,7 +417,7 @@ class MultiObsVAE(nn.Module):
         # pass through the encoder ff net
         mu, logvar = torch.split(self.encoder(enc_rnn_out[:, -1, :]), self.latent_dim, dim=-1)
 
-        return Gaussian(mu, torch.exp(0.5 * logvar))
+        return Gaussian(mu, torch.exp(0.5 * logvar)), enc_rnn_out
 
     def decode(self, s, loc):
 
@@ -442,7 +442,7 @@ class MultiObsVAE(nn.Module):
         loc = loc.reshape((x.shape[:-1]) + (-1,))
 
         # latent variable s
-        s_dist = self.encode(x, loc)
+        s_dist, h = self.encode(x, loc)
         s = s_dist.sample()
 
         # repeat s to match the shape of loc
@@ -451,7 +451,7 @@ class MultiObsVAE(nn.Module):
         # feed through the decoder
         x_hats = self.decode(s, loc)
 
-        return x_hats, s[:, 0, :], s_dist
+        return x_hats, s[:, 0, :], s_dist, h
 
     def reset_rnn_state(self):
         self.rnn_state = None
