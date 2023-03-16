@@ -126,12 +126,11 @@ class DecisionNetwork(nn.Module):
 class RNNDecisionNetwork(DecisionNetwork):
 
     def __init__(self, input_size, layers, num_classes, hidden_size, lr=0.001):
+        # create super instance l
+        super().__init__(hidden_size, layers, num_classes)
 
         # lstm first
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, batch_first=True)
-
-        # create super instance l
-        super().__init__(hidden_size, layers, num_classes)
 
         # initialize the rnn state
         self.rnn_state = None
