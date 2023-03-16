@@ -87,7 +87,7 @@ class BayesianActiveSensor(nn.Module):
 
     def sensing_loop(self, validation: bool = False,
                      testing: bool = False,
-                     with_batch: torch.Tensor = None,
+                     with_batch: tuple[torch.Tensor, torch.Tensor] = None,
                      entropy_thresh: float = None,
                      random_action: bool = False):
         """
@@ -114,7 +114,7 @@ class BayesianActiveSensor(nn.Module):
         actions[:, 0, :] = torch.tensor(state[:, -2:]).to(self.device)  # initial action
 
         # put the actor in training mode based on whether we are validating
-        self.actor.train(not validation)
+        self.actor.train((not validation) and (not testing))
 
         # go through the allowed number of steps
         for t in range(self.env.n_samples):
