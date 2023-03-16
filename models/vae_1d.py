@@ -197,9 +197,14 @@ class VAE(nn.Module):
 
         return self.decode(z), z, dist
 
-    def reset_rnn_state(self):
+    def reset_rnn_state(self, batch_size=None, device=None, state=None):
         # dummy function for consistency
         pass
+
+    @staticmethod
+    def get_rnn_state():
+        # dummy function for consistency
+        return None
 
 
 class RecurrentVAE(nn.Module):
@@ -259,24 +264,12 @@ class RecurrentVAE(nn.Module):
             x = x.unsqueeze(1)
 
         # initialize the encoder rnn
-        enc_h_init = (torch.zeros(self.encoder_rnn.num_layers, x.shape[0], self.encoder_rnn.hidden_size,
-                                  device=x.device,
-                                  requires_grad=False),
-                      torch.zeros(self.encoder_rnn.num_layers, x.shape[0], self.encoder_rnn.hidden_size,
-                                  device=x.device,
-                                  requires_grad=False))
-
-        # if not self.training and (x.shape[1] == 1):        # TODO
-        if x.shape[1] == 1:
-            if self.rnn_state is None:
-                self.rnn_state = enc_h_init
-            else:
-                enc_h_init = self.rnn_state
+        h_init = self.rnn_state if self.rnn_state is not None else self.reset_rnn_state(x.shape[0], x.device)
 
         # pass through the encoder rnn
-        enc_rnn_out, (hn, cn) = self.encoder_rnn(x, enc_h_init)
+        enc_rnn_out, (hn, cn) = self.encoder_rnn(x, h_init)
 
-        # record the rnn state if not training
+        # record the rnn state
         self.rnn_state = (hn, cn)
 
         # pass through the encoder ff net
@@ -337,8 +330,22 @@ class RecurrentVAE(nn.Module):
 
         return self.decode(z), z, dist
 
-    def reset_rnn_state(self):
-        self.rnn_state = None
+    def reset_rnn_state(self, batch_size, device='cuda', state=None):
+        if state is not None:
+            self.rnn_state = state
+        else:
+            self.rnn_state = (torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                          device=device,
+                                          dtype=torch.float,
+                                          requires_grad=True),
+                              torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                          device=device,
+                                          dtype=torch.float,
+                                          requires_grad=True))
+        return self.rnn_state
+
+    def get_rnn_state(self):
+        return self.rnn_state
 
 
 class MultiObsVAE(nn.Module):
@@ -395,21 +402,10 @@ class MultiObsVAE(nn.Module):
         x_in = torch.cat([x, loc], dim=-1)
 
         # initialize the encoder rnn
-        enc_h_init = (torch.zeros(self.encoder_rnn.num_layers, x_in.shape[0], self.encoder_rnn.hidden_size,
-                                  device=x_in.device,
-                                  requires_grad=False),
-                      torch.zeros(self.encoder_rnn.num_layers, x_in.shape[0], self.encoder_rnn.hidden_size,
-                                  device=x_in.device,
-                                  requires_grad=False))
-
-        if x.shape[1] == 1:
-            if self.rnn_state is None:
-                self.rnn_state = enc_h_init
-            else:
-                enc_h_init = self.rnn_state
+        h_init = self.rnn_state if self.rnn_state is not None else self.reset_rnn_state(x_in.shape[0], x_in.device)
 
         # pass through the encoder rnn
-        enc_rnn_out, (hn, cn) = self.encoder_rnn(x_in, enc_h_init)
+        enc_rnn_out, (hn, cn) = self.encoder_rnn(x_in, h_init)
 
         # record the rnn state if not training
         self.rnn_state = (hn, cn)
@@ -453,8 +449,22 @@ class MultiObsVAE(nn.Module):
 
         return x_hats, s[:, 0, :], s_dist, h
 
-    def reset_rnn_state(self):
-        self.rnn_state = None
+    def reset_rnn_state(self, batch_size, device='cuda', state=None):
+        if state is not None:
+            self.rnn_state = state
+        else:
+            self.rnn_state = (torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                          device=device,
+                                          dtype=torch.float,
+                                          requires_grad=True),
+                              torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                          device=device,
+                                          dtype=torch.float,
+                                          requires_grad=True))
+        return self.rnn_state
+
+    def get_rnn_state(self):
+        return self.rnn_state
 
 
 class TwoLatentMultiObsVAE(MultiObsVAE):

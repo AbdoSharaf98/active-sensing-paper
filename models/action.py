@@ -71,9 +71,6 @@ class ActionNetworkStrategy(ActionStrategy):
 
     def _select_action(self, states, actions):
         """ helper for select_action below """
-
-        # reset the perception model
-        self.perception_model.reset_rnn_states()
         # get the input to the action network
         action_input = self.perception_model(states, actions)[-1].mu.detach()
         # get the action distribution
@@ -85,24 +82,25 @@ class ActionNetworkStrategy(ActionStrategy):
         else:
             # in the gaussian case, the continuous action is the mean, and then it's quantized to one of
             # the actions on the grid
-            cont_action = torch.clamp(action_dist.sample(), -1, 1)
-            discrete_action = self.quantize_action(cont_action).to(actions.device)
+            action = torch.clamp(action_dist.sample(), -1, 1)
+            #discrete_action = self.quantize_action(cont_action).to(actions.device)
 
             # copy the gradient to the discrete actions
-            action = (discrete_action - cont_action).detach() + cont_action
+            #action = (discrete_action - cont_action).detach() + cont_action
 
         return action
 
     def select_action(self, states, actions):
         """ select an action given states and actions collected so far """
-
+        # get the current state of the perception model
+        lower_state, higher_state = self.perception_model.get_rnn_states()
         if self._training:
             # select action
             action = self._select_action(states, actions)
 
             # # action evaluation
             # reset the perception model
-            self.perception_model.reset_rnn_states()
+            self.perception_model.reset_rnn_states(states.shape[0], lower_state, higher_state)
             loss = torch.sum(-score_action(self.perception_model,
                                            states, actions,
                                            action, n_samples=1))

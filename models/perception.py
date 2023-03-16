@@ -234,6 +234,11 @@ class PerceptionModel(LightningModule):
 
         return DataLoader(self.trainer.datamodule.test_data, self.trainer.datamodule.batch_size)
 
-    def reset_rnn_states(self):
-        self.vae1.reset_rnn_state()
-        self.vae2.reset_rnn_state()
+    def reset_rnn_states(self, batch_size, lower_state=None, higher_state=None):
+        lower_state = self.vae1.reset_rnn_state(batch_size, device=self.device, state=lower_state)
+        higher_state = self.vae2.reset_rnn_state(batch_size, device=self.device, state=higher_state)
+
+        return lower_state, higher_state
+
+    def get_rnn_states(self):
+        return self.vae1.get_rnn_state(), self.vae2.get_rnn_state()
