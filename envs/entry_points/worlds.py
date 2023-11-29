@@ -99,8 +99,11 @@ class World(gym.Env, ABC):
 
 class DenseWorld(World, ABC):
 
-    def __init__(self, num_states: int, num_actions: int, alphas: np.ndarray):
+    def __init__(self, num_states: int, num_actions: int, alphas: np.ndarray = None):
         super(DenseWorld, self).__init__(num_states, num_actions)
+
+        if alphas is None:
+            alphas = np.ones((num_states, ))
 
         self.prob_table = scp.stats.dirichlet.rvs(alphas, size=num_states * num_actions).reshape(num_states,
                                                                                                  num_actions,

@@ -1,0 +1,28 @@
+model:
+  bas:
+    h_layers: [ 16, 16 ]
+    lr: 0.001
+
+  boltzmann:
+    h_layers: [ 16, 16 ]
+    lr: 0.001
+
+  random:
+    h_layers: [ 16, 16 ]
+    lr: 0.001
+
+env:
+  dense_world:
+    num_states: 10
+    num_actions: 4
+
+  world123:
+    num_states: 20
+    num_actions: 3
+
+  maze:
+    w: 6
+    h: 6
+    num_actions: 4
+    deterministic: False
+

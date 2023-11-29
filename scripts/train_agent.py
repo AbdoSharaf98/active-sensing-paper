@@ -7,7 +7,6 @@ import os
 from copy import deepcopy
 import numpy as np
 
-from annealing_schedules import linear_cyclical_schedule
 from envs.active_sensing import mnist_active_sensing, cifar_active_sensing
 from utils.data import get_mnist_data, get_fashion_mnist, get_kmnist_data, get_cifar
 
@@ -56,7 +55,7 @@ for seed in seeds:
                 d_obs = env.observation_space.shape[-1]
 
                 # create the perception model
-                vae_params = perception_v2.DEFAULT_PARAMS.copy()
+                vae_params = perception.DEFAULT_PARAMS.copy()
                 vae_params['lower_vae']['layers'] = [256, 256]
                 vae_params['summarization_method']: 'cat'
                 vae_params['higher_vae'] = {
