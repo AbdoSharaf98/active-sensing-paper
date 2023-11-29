@@ -68,6 +68,7 @@ def main(args):
                                                         learning_starts=args.learning_starts,
                                                         learn_every=args.learn_every,
                                                         validate_every=args.validate_every,
+                                                        verbose=args.verbose,
                                                         prefix=f"BAS ({seed})")
     print('')
 
@@ -75,6 +76,7 @@ def main(args):
                                                                   learning_starts=args.learning_starts,
                                                                   learn_every=args.learn_every,
                                                                   validate_every=args.validate_every,
+                                                                  verbose=args.verbose,
                                                                   prefix=f"Boltzmann ({seed})")
 
     print('')
@@ -83,6 +85,7 @@ def main(args):
                                                                  learning_starts=args.learning_starts,
                                                                  learn_every=args.learn_every,
                                                                  validate_every=args.validate_every,
+                                                                 verbose=args.verbose,
                                                                  prefix=f"Random ({seed})")
     print('')
 
