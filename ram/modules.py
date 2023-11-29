@@ -237,7 +237,11 @@ class ActionNetwork(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
 
-        self.fc = nn.Linear(input_size, output_size)
+        self.fc = nn.Sequential(nn.Linear(input_size, input_size),
+                                nn.ReLU(),
+                                nn.Linear(input_size, input_size),
+                                nn.ReLU(),
+                                nn.Linear(input_size, output_size))
 
     def forward(self, h_t):
         a_t = F.log_softmax(self.fc(h_t), dim=1)

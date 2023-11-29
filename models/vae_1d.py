@@ -140,8 +140,7 @@ class VAE(nn.Module):
     def __init__(self,
                  input_dim: int,
                  latent_dim: int,
-                 layers=None,
-                 **kwargs):
+                 layers=None):
         super(VAE, self).__init__()
 
         self.latent_dim = latent_dim
@@ -150,12 +149,14 @@ class VAE(nn.Module):
             layers = [32, 64, 128]
 
         # build the encoder network
-        enc_layers = [input_dim] + layers + [2 * latent_dim]
-        self.encoder = create_ff_network(enc_layers)
+        enc_layers = [input_dim] + layers + [latent_dim]
+        self.mu_encoder = create_ff_network(enc_layers, h_activation='relu')
+        self.log_std_encoder = create_ff_network(enc_layers, h_activation='relu')
 
         # build the decoder
         dec_layers = [latent_dim] + list(reversed(layers)) + [input_dim]
-        self.decoder = create_ff_network(dec_layers)
+        self.decoder_log_std = nn.Parameter(torch.zeros((input_dim,), dtype=torch.float, requires_grad=True))
+        self.decoder = create_ff_network(dec_layers, h_activation='relu')
 
     def encode(self, x) -> Gaussian:
         """
@@ -165,10 +166,10 @@ class VAE(nn.Module):
         Outputs:
             Gaussian distribution
         """
+        mu = self.mu_encoder(x)
+        std = torch.exp(self.log_std_encoder(x))
 
-        mu, logvar = torch.split(self.encoder(x), self.latent_dim, dim=-1)
-
-        return Gaussian(mu, torch.exp(0.5 * logvar))
+        return Gaussian(mu, std)
 
     def decode(self, z):
         """
@@ -179,7 +180,10 @@ class VAE(nn.Module):
             x (BxD): decoded output
         """
 
-        return self.decoder(z)
+        mu = self.decoder(z)
+        std = torch.exp(self.decoder_log_std) * torch.ones_like(mu)
+
+        return mu #Gaussian(mu, std).sample()
 
     def forward(self, x):
         """
@@ -357,12 +361,14 @@ class MultiObsVAE(nn.Module):
                  layers=None,
                  rnn_hidden_size=64,
                  rnn_num_layers=1,
-                 decoder_output='rec'):
+                 decoder_output='rec',
+                 aggregation='sum'):
 
         super(MultiObsVAE, self).__init__()
 
         self.latent_dim = latent_dim
         self.input_dim = input_dim
+        self.aggregation = aggregation
 
         # create the encoder RNN
         self.encoder_rnn = nn.LSTM(input_size=input_dim + loc_dim,
@@ -376,13 +382,13 @@ class MultiObsVAE(nn.Module):
         self.layers = layers
 
         # build the encoder network
-        enc_layers = [rnn_hidden_size] + layers + [2 * latent_dim]
-        self.encoder = create_ff_network(enc_layers)
+        enc_layers = [input_dim if aggregation == 'sum' else rnn_hidden_size] + layers + [2 * latent_dim]
+        self.encoder = create_ff_network(enc_layers, h_activation='relu')
 
         # build the decoder network
         dec_out = input_dim if decoder_output == 'rec' else 2 * input_dim
         dec_layers = [latent_dim + loc_dim] + list(reversed(layers)) + [dec_out]
-        self.decoder = create_ff_network(dec_layers)
+        self.decoder = create_ff_network(dec_layers, h_activation='relu')
         self.decoder_output = decoder_output
 
         self.rnn_state = None
@@ -395,25 +401,34 @@ class MultiObsVAE(nn.Module):
         elif len(x.shape) == 2:  # batch of points, seq_len=1, batch_size is first dimension
             x = x.unsqueeze(1)
 
-        # make sure loc has the same shape
-        loc = loc.reshape((x.shape[:-1]) + (-1,))
+        if self.aggregation == 'rnn':
+            # make sure loc has the same shape
+            loc = loc.reshape((x.shape[:-1]) + (-1,))
 
-        # input to the encoder rnn
-        x_in = torch.cat([x, loc], dim=-1)
+            # input to the encoder rnn
+            x_in = torch.cat([x, loc], dim=-1)
 
-        # initialize the encoder rnn
-        h_init = self.rnn_state if self.rnn_state is not None else self.reset_rnn_state(x_in.shape[0], x_in.device)
+            # initialize the encoder rnn
+            if x_in.shape[1] == 1:
+                h_init = self.rnn_state if self.rnn_state is not None else self.init_state(x_in.shape[0], x_in.device)
+                self.rnn_state = h_init
+            else:
+                h_init = self.init_state(x_in.shape[0], x_in.device)
 
-        # pass through the encoder rnn
-        enc_rnn_out, (hn, cn) = self.encoder_rnn(x_in, h_init)
+            # pass through the encoder rnn
+            enc_rnn_out, (hn, cn) = self.encoder_rnn(x_in, h_init)
 
-        # record the rnn state if not training
-        self.rnn_state = (hn, cn)
+            # record the rnn state if not training
+            self.rnn_state = (hn, cn)
+
+            aggregate = enc_rnn_out[:, -1, :]
+        else:
+            aggregate = torch.sum(x, dim=1)
 
         # pass through the encoder ff net
-        mu, logvar = torch.split(self.encoder(enc_rnn_out[:, -1, :]), self.latent_dim, dim=-1)
+        mu, logvar = torch.split(self.encoder(aggregate), self.latent_dim, dim=-1)
 
-        return Gaussian(mu, torch.exp(0.5 * logvar)), enc_rnn_out
+        return Gaussian(mu, torch.exp(0.5 * logvar)), aggregate
 
     def decode(self, s, loc):
 
@@ -449,19 +464,22 @@ class MultiObsVAE(nn.Module):
 
         return x_hats, s[:, 0, :], s_dist, h
 
-    def reset_rnn_state(self, batch_size, device='cuda', state=None):
+    def reset_rnn_state(self):
+        self.rnn_state = None
+
+    def init_state(self, batch_size, device='cuda', state=None):
         if state is not None:
-            self.rnn_state = state
+            init_state = state
         else:
-            self.rnn_state = (torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
-                                          device=device,
-                                          dtype=torch.float,
-                                          requires_grad=True),
-                              torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
-                                          device=device,
-                                          dtype=torch.float,
-                                          requires_grad=True))
-        return self.rnn_state
+            init_state = (torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                      device=device,
+                                      dtype=torch.float,
+                                      requires_grad=True),
+                          torch.zeros(self.encoder_rnn.num_layers, batch_size, self.encoder_rnn.hidden_size,
+                                      device=device,
+                                      dtype=torch.float,
+                                      requires_grad=True))
+        return init_state
 
     def get_rnn_state(self):
         return self.rnn_state

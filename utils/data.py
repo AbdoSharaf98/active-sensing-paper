@@ -152,13 +152,50 @@ def get_fashion_mnist(data_dir=None, transform=True):
     return train_dataset, test_dataset
 
 
+def get_cifar(data_dir=None, transform=True):
+    if data_dir is None:
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(project_dir, 'data', 'cifar')
+
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir)
+
+    # transforms
+    T = transforms.Compose([transforms.ToTensor(), transforms.Grayscale(),
+                            transforms.Normalize((0.5,), (0.5,))])
+    data_transformer = T if transform else None
+
+    train_dataset = datasets.CIFAR10(root=data_dir, train=True, download=True, transform=data_transformer)
+    test_dataset = datasets.CIFAR10(root=data_dir, train=False, download=True, transform=data_transformer)
+
+    return train_dataset, test_dataset
+
+
+def get_kmnist_data(data_dir=None, transform=True):
+    if data_dir is None:
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(project_dir, 'data', 'kmnist')
+
+    if not os.path.isdir(data_dir):
+        os.makedirs(data_dir)
+
+    # transforms
+    normalize = transforms.Normalize((0.5,), (0.5,))
+    data_transformer = transforms.Compose([transforms.ToTensor(), normalize]) if transform else None
+
+    train_dataset = datasets.KMNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+    test_dataset = datasets.KMNIST(root=data_dir, train=False, download=True, transform=data_transformer)
+
+    return train_dataset, test_dataset
+
+
 def collect_data(env, actor, device='cuda'):
     states = torch.zeros(env.batch_size, env.n_samples + 1, env.observation_space.shape[-1])
     actions = torch.zeros(env.batch_size, env.n_samples + 1, env.action_space.shape[-1])
 
-    state = env.reset()
+    state, action = env.reset()
     states[:, 0, :] = torch.tensor(state)
-    actions[:, 0, :] = torch.tensor(state[:, -2:]).to(device)  # initial action
+    actions[:, 0, :] = action
     for t in range(env.n_samples):
         # select action randomly
         action = actor.select_action(states[:, :t + 1, :].detach(), actions[:, :t + 1, :].detach())
@@ -171,7 +208,7 @@ def collect_data(env, actor, device='cuda'):
         actions[:, t + 1, :] = action
 
     # dummy decision to get the true labels
-    _, _, _, infos = env.step(np.zeros((env.batch_size,)))
+    infos = env.step(np.zeros((env.batch_size,)))[-1]
 
     data_dict = {'obs': states, 'locations': actions, 'true_labels': infos['true_labels'],
                  'one_hot_labels': infos['one_hot_labels']}
@@ -200,3 +237,40 @@ def train_test_split(data, train_size=None, test_size=None):
     testing_data = {k: v[test_inds] for k, v in data.items()}
 
     return training_data, testing_data
+
+
+def create_data_loaders(dataset, batch_size, valid_frac=0.1, num_workers=4):
+
+    dsize = len(dataset[0])
+    indices = list(range(dsize))
+    split = int(np.floor(valid_frac * dsize))
+    np.random.shuffle(indices)
+
+    train_idx, valid_idx = indices[split:], indices[:split]
+    val_batch_size = len(valid_idx)
+
+    train_sampler = SubsetRandomSampler(train_idx)
+    valid_sampler = SubsetRandomSampler(valid_idx)
+
+    train_loader = torch.utils.data.DataLoader(
+        dataset[0],
+        batch_size=batch_size,
+        sampler=train_sampler,
+        num_workers=num_workers
+    )
+
+    valid_loader = torch.utils.data.DataLoader(
+        dataset[0],
+        batch_size=val_batch_size,
+        sampler=valid_sampler,
+        num_workers=num_workers
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        dataset[1],
+        batch_size=len(dataset[1]),
+        shuffle=True,
+        num_workers=num_workers
+    )
+
+    return train_loader, valid_loader, test_loader

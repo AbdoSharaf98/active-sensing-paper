@@ -52,7 +52,7 @@ class ActiveSensingEnv(gym.Env, ABC):
         self.test_iterator = iter(self.test_loader)
 
         # define the observation space
-        obs_shape = (self.batch_size, self.num_foveated_patches * num_channels * sample_dim ** 2 + 2)
+        obs_shape = (self.batch_size, self.num_foveated_patches * num_channels * sample_dim ** 2)
         self.observation_space = Box(low=min_pixel_value,
                                      high=max_pixel_value,
                                      shape=obs_shape)
@@ -180,13 +180,12 @@ class ActiveSensingEnv(gym.Env, ABC):
         loc = torch.FloatTensor(bsz, 2).uniform_(-1, 1)
 
         samples = self.sense(self.current_batch[0], loc).numpy()
-        samples = np.concatenate((samples, loc), axis=-1)
         self.current_sample = samples
 
         self.current_step = 0
         self.done = False
 
-        return samples
+        return samples, loc
 
     def step(self, action: Optional[np.ndarray]):
 
@@ -225,7 +224,6 @@ class ActiveSensingEnv(gym.Env, ABC):
 
         else:
             next_sample = self.sense(self.current_batch[0], torch.tensor(action)).detach().numpy()
-            next_sample = np.concatenate((next_sample, action), axis=-1)
             self.current_step += 1
             self.current_sample = next_sample
 
@@ -236,8 +234,8 @@ class ActiveSensingEnv(gym.Env, ABC):
 
     def get_fov_from_obs(self, obs):
 
-        # remove locations and convert to tensor
-        obs = torch.tensor(obs[..., :-2])
+        # convert to tensor
+        obs = torch.tensor(obs)
 
         # reshape
         batch_shape = obs.shape[:-1]

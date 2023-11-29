@@ -2,49 +2,32 @@ from types import MappingProxyType
 
 import torch.optim
 from torch import nn
-import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torch.nn.functional import mse_loss
 from torch.utils.data import DataLoader
 from typing_extensions import Required
 
-from models.vaes.lower_vae import LowerVAE
-from models.vaes.higher_vae import HigherVAE
+from models.vae_1d import VAE, RecurrentVAE, MultiObsVAE
 from utils import training
 
-DEFAULT_PARAMS = MappingProxyType({
-    'summarization_method': 'mlp',
-    'lower_vae': {
-        'layers': [256, 256]
-    },
-    'higher_vae': {
-        'layers': [256, 256],
-        'integration_method': 'sum',
-        'summarization_method': 'mlp',
-        'rnn_hidden_size': 512,
+DEFAULT_VAE1_PARAMS = MappingProxyType({
+
+    'type': 'recurrent',  # OPTIONS: 'recurrent', 'mlp'
+    'recurrent_params': {
+        'rnn_hidden_size': 256,
         'rnn_num_layers': 1
-    }
+    },
+    'vq_params': {
+        'num_embeddings': 8
+    },
+    'layers': [256]
 })
 
-
-class MlpSummarizer(nn.Module):
-
-    def __init__(self, obs_dim: int, loc_dim: int):
-        super(MlpSummarizer, self).__init__()
-
-        self.fc_obs = nn.Linear(obs_dim, obs_dim + loc_dim)
-        self.fc_loc = nn.Linear(loc_dim, obs_dim + loc_dim)
-        self.output_dim = obs_dim + loc_dim
-
-    def forward(self, obs: torch.Tensor, loc: torch.Tensor):
-        return F.relu(self.fc_obs(obs) + self.fc_loc(loc))
-
-
-class CatSummarizer(nn.Module):
-
-    @staticmethod
-    def forward(obs: torch.Tensor, loc: torch.Tensor):
-        return torch.cat([obs, loc], dim=-1)
+DEFAULT_VAE2_PARAMS = MappingProxyType({
+    'layers': [256, 256],
+    'rnn_hidden_size': 256,
+    'rnn_num_layers': 1
+})
 
 
 class PerceptionModel(LightningModule):
@@ -52,55 +35,64 @@ class PerceptionModel(LightningModule):
     def __init__(self,
                  z_dim,
                  s_dim,
-                 loc_dim,
+                 action_dim,
                  obs_dim,
-                 vae_params: dict = DEFAULT_PARAMS,
+                 vae1_params=DEFAULT_VAE1_PARAMS,
+                 vae2_params=DEFAULT_VAE2_PARAMS,
                  vae1=None,
                  vae2=None,
                  use_latents=True,  # whether to use the observation directly to infer s or map them through z
                  encode_loc=False,
-                 lr=0.001,
-                 ):
+                 lr=0.001):
 
-        super(PerceptionModel, self).__init__()
+        super().__init__()
 
         self.save_hyperparameters()
 
         self.z_dim = z_dim
         self.s_dim = s_dim
-        self.loc_dim = loc_dim
+        self.action_dim = action_dim
         self.obs_dim = obs_dim
-        self.use_latents = use_latents
         self.lr = lr
+        self.use_latents = use_latents
+
         self.automatic_optimization = False
 
-        # build the summarizer
-        self.lower_summarizer = MlpSummarizer(obs_dim, loc_dim) if \
-            vae_params['summarization_method'] == 'mlp' else CatSummarizer()
-
-        self.higher_summarizer = MlpSummarizer(z_dim if use_latents else obs_dim, loc_dim) if \
-            vae_params['summarization_method'] == 'mlp' else CatSummarizer()
-
-        # build the location encoder
-        if encode_loc:
-            self.location_encoder = nn.Sequential(nn.Linear(2, loc_dim), nn.ReLU())
-        else:
-            self.location_encoder = nn.Identity()
-
-        # build the lower vae
+        # ------------------------ building the vae models --------------------------- #
+        """ VAE 1 """
         if vae1 is None:
-            self.vae1 = LowerVAE(self.obs_dim, self.loc_dim, self.z_dim, summarizer=self.lower_summarizer,
-                                 layers=vae_params['lower_vae']['layers'])
+
+            # default is a ff vae
+            vae_class = VAE
+            vae_class_params = {}
+
+            if vae1_params['type'] == 'recurrent':
+                vae_class = RecurrentVAE
+                vae_class_params = vae1_params['recurrent_params']
+
+            self.vae1 = vae_class(input_dim=obs_dim + action_dim,
+                                  latent_dim=z_dim,
+                                  layers=vae1_params['layers'],
+                                  **vae_class_params)
         else:
             self.vae1 = vae1
 
-        # build the higher vae
+        """ VAE 2: this is always an instance of MultiObsVAE """
         if vae2 is None:
-            self.vae2 = HigherVAE(self.z_dim if use_latents else obs_dim, self.loc_dim, self.s_dim,
-                                  summarizer=self.higher_summarizer,
-                                  **vae_params['higher_vae'])
+
+            self.vae2 = MultiObsVAE(input_dim=z_dim if use_latents else obs_dim + action_dim,
+                                    loc_dim=action_dim, latent_dim=s_dim,
+                                    **vae2_params, decoder_output='dist')
+
         else:
+            assert isinstance(vae2, MultiObsVAE), 'Second VAE must be an instance of MultiObsVAE'
             self.vae2 = vae2
+
+        # -------------------------- location encoder --------------------------- #
+        if encode_loc:
+            self.loc_encoder = nn.Sequential(nn.Linear(2, 256), nn.ReLU(), nn.Linear(256, action_dim))
+        else:
+            self.loc_encoder = nn.Identity()
 
         # construct a manual optimizer (in case of manual training)
         self.manual_optimizer = self.configure_optimizers()
@@ -113,56 +105,63 @@ class PerceptionModel(LightningModule):
         return self._trainer
 
     @trainer.setter
-    def trainer(self, trainer: training.PerceptionModelTrainer):
+    def trainer(self, trainer):
         self._trainer = trainer
 
     def parameter_list(self):
         return list(self.vae2.parameters()) + int(self.use_latents) * list(self.vae1.parameters())
 
-    def configure_optimizers(self, lr: float = None):
+    def configure_optimizers(self, lr=None):
         if lr is None:
             lr = self.lr
         return torch.optim.Adam(self.parameter_list(), lr=lr)
 
-    def forward(self, obs: torch.Tensor, locs: torch.Tensor):
+    def forward(self, obs, locations):
 
         # if un-batched, add a dummy batch dimension
         if len(obs.shape) == 1:
             obs = obs.reshape(1, *obs.shape)
-        if len(locs.shape) == 1:
-            locs = locs.reshape(1, *locs.shape)
+
+        if len(locations.shape) == 1:
+            locations = locations.reshape(1, *locations.shape)
 
         # encode locations
-        locs = self.location_encoder(locs)
+        locations = self.loc_encoder(locations)
 
         # pass through the first vae
-        vae2_input = obs
+        vae2_input = torch.cat([obs[..., :-2], locations], dim=-1)
         z_posterior = None
         z_latents = None
         if self.use_latents:
-            _, z_latents, z_posterior = self.vae1(obs, locs)
+            _, z_latents, z_posterior = self.vae1(vae2_input)
             vae2_input = z_latents
 
         # pass through the second vae
-        z_prior, s_latent, s_posterior, h = self.vae2(vae2_input, locs)
+        z_prior, s_latent, s_posterior, h = self.vae2(vae2_input, locations)
 
         # compute the reconstructions of the z latents
+        z_recons = None
         if self.use_latents:
-            recs = self.vae1.decode(z_prior.sample())
+            z_recons = z_prior.mu
+            recons = self.vae1.decode(z_prior.sample()).squeeze()
         else:
-            recs = z_prior.mu
+            recons = z_prior.mu
 
-        return recs, z_latents, z_posterior, h, z_prior, s_posterior
+        return recons, z_recons, z_latents, z_posterior, h, z_prior, s_posterior
 
     def _compute_losses(self, obs, locations, beta=1.0, rec_loss_scale=1.0):
         # TODO: in computing the KL losses (or expected log prob diffs) we can try drawing multiple samples and
         # TODO: averaging over them
 
         # forward the model
-        recs, z_latents, z_posterior, h, z_prior, s_posterior = self.forward(obs, locations)
+        recons, z_recons, z_latents, z_posterior, h, z_prior, s_posterior = self.forward(obs, locations)
 
         # compute the reconstruction loss
-        rec_loss = mse_loss(recs, obs, reduction='none').sum(dim=[-2, -1]).mean()
+        x_rec_loss = mse_loss(recons, obs, reduction='none').sum(dim=[-2, -1]).mean()
+        z_rec_loss = 0.0
+        if self.use_latents:
+            z_rec_loss = mse_loss(z_recons, z_latents, reduction='none').sum(dim=[-2, -1]).mean()
+        rec_loss = x_rec_loss  # + z_rec_loss #TODO: what happens if we don't include the z rec loss
 
         # compute the kl loss between the z posterior and prior
         if self.use_latents:
@@ -245,8 +244,17 @@ class PerceptionModel(LightningModule):
 
         return DataLoader(self.trainer.datamodule.test_data, self.trainer.datamodule.batch_size)
 
+    """
+    def reset_rnn_states(self, batch_size, lower_state=None, higher_state=None):
+        lower_state = self.vae1.reset_rnn_state(batch_size, device=self.device, state=lower_state)
+        higher_state = self.vae2.reset_rnn_state(batch_size, device=self.device, state=higher_state)
+
+        return lower_state, higher_state
+    """
+
     def reset_rnn_states(self):
+        self.vae1.reset_rnn_state()
         self.vae2.reset_rnn_state()
 
     def get_rnn_states(self):
-        return self.vae2.get_rnn_state()
+        return self.vae1.get_rnn_state(), self.vae2.get_rnn_state()

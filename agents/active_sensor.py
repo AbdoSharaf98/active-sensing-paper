@@ -103,7 +103,7 @@ class BayesianActiveSensor(nn.Module):
         self.perception_model.reset_rnn_states()
 
         # reset the environment
-        state = self.env.reset(validation=validation, testing=testing, with_batch=with_batch)
+        state, action = self.env.reset(validation=validation, testing=testing, with_batch=with_batch)
 
         # construct tensor to hold episode data
         bsz = len(self.env.current_batch[0])
@@ -111,7 +111,7 @@ class BayesianActiveSensor(nn.Module):
         actions = torch.zeros((bsz, self.env.n_samples + 1, self.env.action_space.shape[-1])).to(self.device)
 
         states[:, 0, :] = torch.tensor(state).to(self.device)  # initial state
-        actions[:, 0, :] = torch.tensor(state[:, -2:]).to(self.device)  # initial action
+        actions[:, 0, :] = torch.tensor(action).to(self.device)  # initial action
 
         # put the actor in training mode based on whether we are validating
         self.actor.train((not validation) and (not testing))
@@ -150,7 +150,7 @@ class BayesianActiveSensor(nn.Module):
             s_dist = self.perception_model(states, actions)[-1]
             decision_dist = self.decider(s_dist.mu)
         else:
-            decision_dist = self.decider(states[..., :-2])[:, -1, :]
+            decision_dist = self.decider(torch.cat([states, actions], dim=-1))
 
         # get the decision
         decision = torch.argmax(decision_dist, dim=-1)
@@ -177,7 +177,6 @@ class BayesianActiveSensor(nn.Module):
                                                                                        actions,
                                                                                        beta=beta)
         if update:
-            self.perception_model.manual_optimizer.zero_grad()
 
             # optimize the decider
             if not random_action:
@@ -186,9 +185,10 @@ class BayesianActiveSensor(nn.Module):
                 self.decider.optimizer.step()
 
             # optimize the perception model
+            self.perception_model.manual_optimizer.zero_grad()
             p_loss.backward()
             # clip gradients to prevent gradient explosion
-            nn.utils.clip_grad_norm_(self.perception_model.parameter_list(), 10)
+            # nn.utils.clip_grad_norm_(self.perception_model.parameter_list(), 10)
             self.perception_model.manual_optimizer.step()
 
         return accuracy, decision_loss, (p_loss, rec_loss, z_kl_loss, s_kl_loss), states.shape[1] - 1
@@ -271,6 +271,10 @@ class BayesianActiveSensor(nn.Module):
                 accuracy, decision_loss, perception_losses, steps = self.training_step(entropy_thresh,
                                                                                        beta_sched[epoch],
                                                                                        random_action=rnd_act)
+
+                # step the number of total updates
+                total_updates += 1
+
                 # store accuracy to calculate running average
                 train_accs[batch_num] = accuracy
 
@@ -300,12 +304,13 @@ class BayesianActiveSensor(nn.Module):
                     if avg_val_accuracy >= max_val_acc:
                         max_val_acc = avg_val_accuracy
                         best_model_checkpoint = self.save_checkpoint(
-                            f'bestModel_epoch={total_updates / num_updates_per_epoch:0.2f}',
+                            f'last',
                             {'accuracy': avg_val_accuracy, 'decision_loss': avg_val_loss})
                     max_tst_acc = max(max_tst_acc, avg_tst_accuracy)
-
-                    print(Fore.LIGHTGREEN_EX + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
-                          + Fore.LIGHTGREEN_EX + f' \t \033[1mMAX SCORE\033[0m = {max_val_acc:0.3f}')
+                    print('')
+                    print(
+                        Fore.LIGHTGREEN_EX + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
+                        + Fore.LIGHTGREEN_EX + f' \t \033[1mMAX SCORE\033[0m = {max_val_acc:0.3f}')
                     print(Fore.GREEN + f'[test] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_tst_accuracy:0.3f}'
                           + Fore.GREEN + f' \t \033[1mMAX SCORE\033[0m = {max_tst_acc:0.3f}')
 
@@ -317,8 +322,6 @@ class BayesianActiveSensor(nn.Module):
                     self.logger.add_scalar('test/decision_loss', avg_tst_loss, total_updates)
                     self.logger.add_scalar('test/steps', avg_tst_steps, total_updates)
 
-                # step the number of total updates
-                total_updates += 1
             # print a new line for the next epoch
             print('')
 
@@ -330,9 +333,9 @@ class BayesianActiveSensor(nn.Module):
         best_train_avg_score, best_train_avg_loss, best_train_avg_steps = 0, 0, 0
         for batch_num in range(num_train):
             accuracy, decision_loss, _, steps = self.training_step(entropy_thresh, update=False)
-            best_train_avg_score += accuracy/num_train
-            best_train_avg_loss += decision_loss/num_train
-            best_train_avg_steps += steps/num_train
+            best_train_avg_score += accuracy / num_train
+            best_train_avg_loss += decision_loss / num_train
+            best_train_avg_steps += steps / num_train
 
         # pass through the validation data
         best_valid_avg_score, best_valid_avg_loss, best_valid_avg_steps = self.validation_step(entropy_thresh)
@@ -342,6 +345,3 @@ class BayesianActiveSensor(nn.Module):
               + Fore.GREEN + f'\t \033[1mTRAIN STEPS\033[0m = {best_train_avg_steps:0.3f}'
               + Fore.GREEN + f' \t \033[1mVALID SCORE\033[0m = {best_valid_avg_score:0.3f}'
               + Fore.GREEN + f'\t \033[1mVALID STEPS\033[0m = {best_valid_avg_steps:0.3f}')
-
-
-

@@ -10,6 +10,8 @@ def create_ff_network(layer_dims, h_activation='tanh', out_activation='none'):
         h_activation_fxn = nn.Sigmoid
     elif h_activation == 'relu':
         h_activation_fxn = nn.ReLU
+    elif h_activation == 'softplus':
+        h_activation_fxn = nn.Softplus
     elif h_activation == 'none':
         h_activation_fxn = None
     else:
@@ -36,6 +38,14 @@ def create_ff_network(layer_dims, h_activation='tanh', out_activation='none'):
     elif out_activation == 'softmax':
         layers.append(
             nn.Sequential(nn.Linear(layer_dims[-2], layer_dims[-1]), nn.Softmax(dim=-1))
+        )
+    elif out_activation == 'relu':
+        layers.append(
+            nn.Sequential(nn.Linear(layer_dims[-2], layer_dims[-1]), nn.ReLU())
+        )
+    elif out_activation == 'softplus':
+        layers.append(
+            nn.Sequential(nn.Linear(layer_dims[-2], layer_dims[-1]), nn.Softplus())
         )
     else:
         layers.append(
@@ -68,7 +78,7 @@ class ActionNetwork(nn.Module):
         if layers is None:
             layers = [256]
         base_layers = [input_dim] + layers
-        self.base_net = create_ff_network(base_layers, h_activation='none', out_activation='none')
+        self.base_net = create_ff_network(base_layers, h_activation='relu', out_activation='relu')
 
         # construct the distribution network
         self.out_dist = out_dist
@@ -123,6 +133,26 @@ class DecisionNetwork(nn.Module):
         return self.ff(x)
 
 
+class ConcatDecisionNetwork(DecisionNetwork):
+
+    def __init__(self, input_size, seq_len, layers, num_classes, lr=0.001):
+        # create the super instance
+        super().__init__(input_size * seq_len, layers, num_classes)
+
+        # create the optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+    def forward(self, x):
+        # if necessary, adjust dimensions to match conventions
+        if len(x.shape) == 2:  # one data point, batch_size=1, seq_len=shape[1], input_size=shape[-1]
+            x = x.reshape(1, *x.shape)
+
+        # concatenate observations (flatten the sequence length dimension)
+        x = x.flatten(start_dim=-2)
+
+        return super().forward(x)
+
+
 class RNNDecisionNetwork(DecisionNetwork):
 
     def __init__(self, input_size, layers, num_classes, hidden_size, lr=0.001):
@@ -168,7 +198,7 @@ class RNNDecisionNetwork(DecisionNetwork):
             self.rnn_state = (hn, cn)
 
         # return the decision distribution 
-        return super().forward(h_out)
+        return super().forward(h_out)[:, -1, :]
 
     def reset_rnn_state(self):
         self.rnn_state = None

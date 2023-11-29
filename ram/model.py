@@ -1,6 +1,7 @@
 # *********************************************************************** #
 # Adapted from https://github.com/kevinzakka/recurrent-visual-attention
 # *********************************************************************** #
+from typing import Optional
 
 import torch.nn as nn
 from ram import modules
@@ -81,8 +82,6 @@ class RecurrentAttentionModel(nn.Module):
         self.to(self.device)
 
     def save_checkpoint(self, save_name: str, loss_dict: dict):
-
-        # TODO: we may want to save the perception model's hyper-parameters
 
         chkpt_dict = {
             'state_dict': self.state_dict(),
@@ -222,12 +221,15 @@ class RecurrentAttentionModel(nn.Module):
 
         return acc, loss
 
-    def validation_step(self, M=1):
+    def validation_step(self, M=1, loader=None):
 
         avg_loss = 0
         avg_acc = 0
 
-        for i, (x, y) in enumerate(self.env.valid_loader):
+        if loader is None:
+            loader = self.env.valid_loader
+
+        for i, (x, y) in enumerate(loader):
 
             x, y = x.to(self.device), y.to(self.device)
 
@@ -289,15 +291,15 @@ class RecurrentAttentionModel(nn.Module):
             acc = correct.sum() / len(y)
 
             # store
-            avg_loss += loss.item() / len(self.env.valid_loader)
-            avg_acc += acc.item() / len(self.env.valid_loader)
+            avg_loss += loss.item() / len(loader)
+            avg_acc += acc.item() / len(loader)
 
         return avg_acc, avg_loss
 
     def learn(self, num_epochs: int,
               M: int = 1,
               log_every: int = 5,
-              validate_every: int = 3,
+              validate_every=3,
               num_random_epochs: int = 1):
 
         # get the number of updates to log/validate after
@@ -307,6 +309,7 @@ class RecurrentAttentionModel(nn.Module):
 
         # initialize array to track training and validation accuracies
         max_val_acc = 0
+        max_test_acc = 0
 
         # no of training batches
         num_train = len(self.env.train_loader)
@@ -327,6 +330,8 @@ class RecurrentAttentionModel(nn.Module):
 
                 accuracy, loss = self.training_step(batch, random_action=epoch < num_random_epochs)
 
+                total_updates += 1
+
                 # store accuracy to calculate running average
                 train_accs[batch_num] = accuracy
 
@@ -344,23 +349,29 @@ class RecurrentAttentionModel(nn.Module):
                 # validate
                 if (total_updates % validate_interval == 0) and (epoch >= num_random_epochs):
                     avg_val_accuracy, avg_val_loss = self.validation_step(M=M)
+                    avg_test_accuracy, avg_test_loss = self.validation_step(M=M, loader=self.env.test_loader)
 
                     # checkpoint if max val acc has been exceeded
                     if avg_val_accuracy >= max_val_acc:
                         max_val_acc = avg_val_accuracy
                         best_model_checkpoint = self.save_checkpoint(
-                            f'bestModel_epoch={total_updates / num_updates_per_epoch:0.2f}',
-                            {'accuracy': avg_val_accuracy, 'loss': avg_val_loss})
+                            f'last', {'accuracy': avg_val_accuracy, 'loss': avg_val_loss})
 
-                    print(Fore.GREEN + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
+                    if avg_test_accuracy >= max_test_acc:
+                        max_test_acc = avg_test_accuracy
+
+                    print('')
+                    print(Fore.LIGHTGREEN_EX + f'[valid] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_val_accuracy:0.3f}'
                           + Fore.GREEN + f' \t \033[1mMAX SCORE\033[0m = {max_val_acc:0.3f}')
+                    print(Fore.GREEN + f'[test] Episode {epoch + 1}:\t \033[1mSCORE\033[0m = {avg_test_accuracy:0.3f}'
+                          + Fore.GREEN + f' \t \033[1mMAX SCORE\033[0m = {max_test_acc:0.3f}')
 
                     # log
                     self.logger.add_scalar('valid/accuracy', avg_val_accuracy, total_updates)
                     self.logger.add_scalar('valid/loss', avg_val_loss, total_updates)
+                    self.logger.add_scalar('test/accuracy', avg_test_accuracy, total_updates)
+                    self.logger.add_scalar('test/loss', avg_test_accuracy, total_updates)
 
-                # step the number of total updates
-                total_updates += 1
             # print a new line for the next epoch
             print('')
 

@@ -32,13 +32,13 @@ class ActionStrategy:
 
         return self.action_grid.table.to(action.device)[inds]
 
-    def train(self, mode: bool = True):     # relevant only for trainable strategies
+    def train(self, mode: bool = True):  # relevant only for trainable strategies
         pass
 
     def select_action(self, states, actions):  # needs to be implemented by subclasses
         raise NotImplementedError
 
-    def state_dict(self):     # for checkpointing purposes
+    def state_dict(self):  # for checkpointing purposes
         raise NotImplementedError
 
 
@@ -53,7 +53,7 @@ class ActionNetworkStrategy(ActionStrategy):
 
         # construct the action network
         self.action_net = ActionNetwork(input_dim=self.perception_model.s_dim,
-                                        action_dim=self.perception_model.action_dim,
+                                        action_dim=2,
                                         layers=layers,
                                         out_dist=out_dist,
                                         num_actions=self.action_grid.num_actions,
@@ -72,6 +72,7 @@ class ActionNetworkStrategy(ActionStrategy):
     def _select_action(self, states, actions):
         """ helper for select_action below """
         # get the input to the action network
+        self.perception_model.reset_rnn_states()
         action_input = self.perception_model(states, actions)[-1].mu.detach()
         # get the action distribution
         action_dist = self.action_net.forward(action_input)
@@ -83,24 +84,22 @@ class ActionNetworkStrategy(ActionStrategy):
             # in the gaussian case, the continuous action is the mean, and then it's quantized to one of
             # the actions on the grid
             action = torch.clamp(action_dist.sample(), -1, 1)
-            #discrete_action = self.quantize_action(cont_action).to(actions.device)
+            # discrete_action = self.quantize_action(cont_action).to(actions.device)
 
             # copy the gradient to the discrete actions
-            #action = (discrete_action - cont_action).detach() + cont_action
+            # action = (discrete_action - cont_action).detach() + cont_action
 
         return action
 
     def select_action(self, states, actions):
         """ select an action given states and actions collected so far """
-        # get the current state of the perception model
-        lower_state, higher_state = self.perception_model.get_rnn_states()
         if self._training:
             # select action
             action = self._select_action(states, actions)
 
             # # action evaluation
             # reset the perception model
-            self.perception_model.reset_rnn_states(states.shape[0], lower_state, higher_state)
+            self.perception_model.reset_rnn_states()
             loss = torch.sum(-score_action(self.perception_model,
                                            states, actions,
                                            action, n_samples=1))
@@ -171,12 +170,19 @@ class DirectEvaluationStrategy(ActionStrategy):
 
 class RandomActionStrategy(ActionStrategy):
     """ selects a random action from the action grid """
+
+    def __init__(self, *args, discrete=True, **kwargs):
+        super(RandomActionStrategy, self).__init__(*args, **kwargs)
+        self.discrete = discrete
+
     def select_action(self, states, actions=None):
-        action_inds = np.random.randint(0, high=self.action_grid.num_actions, size=(states.shape[0],))
-        return torch.tensor(self.action_grid.get_action(action_inds)).float().to(states.device)
+        if self.discrete:
+            action_inds = np.random.randint(0, high=self.action_grid.num_actions,
+                                            size=(states.shape[0],))
+            return torch.tensor(self.action_grid.get_action(action_inds)).float().to(states.device)
+        else:
+            actions = torch.randn(size=(states.shape[0], 2)).to(states.device)
+            return torch.clip(actions, min=-1, max=1)
 
     def state_dict(self):
         return "RandomActionStrategy"
-
-
-

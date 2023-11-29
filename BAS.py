@@ -69,10 +69,13 @@ def score_action(perception_model, states, actions, candidate, n_samples=1):
 
     # use the current estimate of s and the candidate location to predict the next observation
     curr_s = curr_s_dist.mu
-    z_dist = perception_model.vae2.decode(curr_s, candidate)
+    z_dist = perception_model.vae2.decode(curr_s, perception_model.location_encoder(candidate))
 
-    z_samples = z_dist.sample_n(n_samples)
-    x_samples = perception_model.vae1.decode(z_samples)
+    z_samples = z_dist.sample_n(n_samples)   # TODO: just using the mean to see effect
+    if perception_model.use_latents:
+        x_samples = perception_model.vae1.decode(z_samples)
+    else:
+        x_samples = z_samples
 
     # some rearranging of dimensions for batch computation
     x_samples = x_samples.reshape((n_samples, B, 1, D_s))
