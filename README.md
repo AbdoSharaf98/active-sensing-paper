@@ -9,8 +9,7 @@ This repository is the official implementation of our paper [Active Sensing with
 
 This paper has been submitted for publication in [Patterns](https://www.cell.com/patterns/home).
 
-> Brief description of what this paper is about (2-3 sentences). Include a
-> figure as well with the main result of your paper.
+In this paper, we developed an end-to-end perception-action framework for embodied exploration based on two theories from computational neuroscience: predictive coding for perception and uncertainty minimization for action. We apply this framework to two exploration settings: discrete-action Controllable Markov Chains, and continuous-action active vision tasks. 
 
 ![](models_architectures.png)
 
