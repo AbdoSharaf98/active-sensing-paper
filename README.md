@@ -63,6 +63,8 @@ Alternatively, we also provide a `requirements.txt` file which you can use to in
 
     pip install -r requirements.txt
 
+## Creating and training models
+
 ## Reproducing the results
 
 Before running any code you must activate the conda environment:
