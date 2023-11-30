@@ -18,7 +18,7 @@ This paper has been submitted for publication in [Patterns](https://www.cell.com
 
 ## Abstract
 
-> Paste here the abstract.
+We present an end-to-end procedure for embodied exploration inspired by two biological computations: predictive coding and uncertainty minimization. The procedure can be applied to exploration settings in a task-independent and intrinsically driven manner. We first demonstrate our approach in a maze navigation task and show that it can discover the underlying transition distributions and spatial features of the environment. Second, we apply our model to a more complex active vision task, where an agent actively samples its visual environment to gather information. We show that our model builds unsupervised representations through exploration that allow it to efficiently categorize visual scenes. We further show that using these representations for downstream classification leads to superior data efficiency and learning speed compared to other baselines while maintaining lower parameter complexity.  Finally, the modularity of our model allows us to probe its internal mechanisms and analyze the interaction between perception and action during exploration.
 
 
 ## Software implementation
