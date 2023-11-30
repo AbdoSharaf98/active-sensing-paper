@@ -12,6 +12,8 @@ This paper has been submitted for publication in [Patterns](https://www.cell.com
 > Brief description of what this paper is about (2-3 sentences). Include a
 > figure as well with the main result of your paper.
 
+![](models_architectures.png)
+
 
 *Caption for the example figure with the main results.*
 
