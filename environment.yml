@@ -1,4 +1,4 @@
-name: pred-rl
+name: active-sensing
 channels:
   - defaults
 dependencies:
