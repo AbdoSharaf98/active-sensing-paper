@@ -3,7 +3,7 @@
 by
 Abdelrahman Sharafeldin,
 Nabil Imam,
-Hannah Choi
+and Hannah Choi
 
 This repository is the official implementation of our paper [Active Sensing with Predictive Coding and Uncertainty Minimization](https://arxiv.org/abs/2307.00668).
 
