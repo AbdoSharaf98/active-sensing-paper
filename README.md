@@ -9,12 +9,12 @@ This repository is the official implementation of our paper [Active Sensing with
 
 This paper has been submitted for publication in [Patterns](https://www.cell.com/patterns/home).
 
-In this paper, we developed an end-to-end perception-action framework for embodied exploration based on two theories from computational neuroscience: predictive coding for perception and uncertainty minimization for action. We apply this framework to two exploration settings: discrete-action Controllable Markov Chains, and continuous-action active vision tasks. 
+In this paper, we developed an end-to-end perception-action framework for embodied exploration based on two theories from computational neuroscience: predictive coding for perception and uncertainty minimization for action. We apply this framework to two exploration settings: discrete-action Controllable Markov Chains (CMCs), and continuous-action active vision tasks. 
 
 ![](models_architectures.png)
 
 
-*Caption for the example figure with the main results.*
+*Generative models and architectures for the active exploration agents in CMCs (left) and active vision (right). In both cases, the perception model aims to optimize the ELBO of a generative model that reflects the nature of the task, while the action model selects actions in an intrinsically-motivated manner to minimize the uncertainty of the perception model.*
 
 
 ## Abstract
