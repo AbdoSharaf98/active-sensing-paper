@@ -57,8 +57,11 @@ Run the following command in the repository folder (where `environment.yml`
 is located) to create a separate environment and install all required
 dependencies in it:
 
-    conda env create
+    conda env create -f environment.yml
 
+Alternatively, we also provide a `requirements.txt` file which you can use to install the dependencies with `pip` by running:
+
+    pip install -r requirements.txt
 
 ## Reproducing the results
 
