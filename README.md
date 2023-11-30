@@ -5,9 +5,7 @@ Abdelrahman Sharafeldin,
 Nabil Imam,
 Hannah Choi
 
-> This repository is the official implementation of our paper [Active Sensing with Predictive Coding and Uncertainty Minimization](https://arxiv.org/abs/2307.00668).
-
-> Fill out the sections below with the information for your paper.
+This repository is the official implementation of our paper [Active Sensing with Predictive Coding and Uncertainty Minimization](https://arxiv.org/abs/2307.00668).
 
 This paper has been submitted for publication in [Patterns](https://www.cell.com/patterns/home).
 
