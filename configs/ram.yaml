@@ -1,0 +1,6 @@
+ram:
+  h_g: 64
+  h_l: 64
+  hidden_size: 128
+  std: 0.05
+  lr: 0.001

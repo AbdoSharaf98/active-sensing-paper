@@ -1,57 +1,83 @@
-"""
-A script for training the Recurrent Attention Model proposed in Mnih et al. https://arxiv.org/abs/1406.6247
-"""
-
-
 import torch
 import os
 from copy import deepcopy
 
-from envs.active_sensing import mnist_active_sensing
+from envs.active_sensing import active_sensing_env
 from models.action import RandomActionStrategy
-from utils.data import get_mnist_data, get_fashion_mnist
+from utils.data import get_mnist_data, get_fashion_mnist, get_cifar
 
 from ram.model import RecurrentAttentionModel
 import numpy as np
+import yaml
+import argparse
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def get_arg_parser():
+    parser = argparse.ArgumentParser()
 
-seeds = [66233]
+    parser.add_argument("--log_dir", type=str, default="./runs/ram")
+    parser.add_argument("--exp_name", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--config_dir", type=str, default="./configs/ram.yaml")
+    parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
+    parser.add_argument("--env_name", type=str, default="mnist")
+    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_warmup_epochs", type=int, default=0)
+    parser.add_argument("--M", type=int, default=1)
+    parser.add_argument("--validate_every", type=float, default=4)
+    parser.add_argument("--device", type=str, default="cuda")
 
-for seed in seeds:
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    return parser
 
+
+def main(args):
     # create the environment
-    config = deepcopy(mnist_active_sensing.DEFAULT_CONFIG)
-    config['batch_size'] = 64
-    config['val_batch_size'] = 1000
-    config['n_samples'] = n = 3
-    config['sample_dim'] = d = 12
-    config['num_foveated_patches'] = nfov = 3
-    config['fovea_scale'] = fovsc = 2
-    config['num_workers'] = 0
-    config['valid_frac'] = 0.1
-    config['dataset'] = get_mnist_data(data_version='translated')
-    env = mnist_active_sensing.make_env(config)
+    with open(args.env_config_dir, "r") as f:
+        env_config = yaml.safe_load(f)[args.env_name]
+
+    if args.env_name == "mnist":
+        env_config['dataset'] = get_mnist_data()
+    elif args.env_name == "translated_mnist":
+        env_config['dataset'] = get_mnist_data(data_version="translated")
+    elif args.env_name == "fashion_mnist":
+        env_config['dataset'] = get_fashion_mnist()
+    else:
+        env_config['dataset'] = get_cifar()
+
+    n, d = env_config['n_samples'], env_config['sample_dim']
+    nfov, fovsc = env_config['num_foveated_patches'], env_config['fovea_scale']
+
+    env = active_sensing_env.make_env(env_config)
+
+    # set seed
+    seed = args.seed if args.seed is not None else np.random.randint(999)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    env.seed(seed)
+
+    # load the config file
+    with open(args.config_dir, "r") as f:
+        model_config = yaml.safe_load(f)['ram']
+
+    # logging and checkpointing directory
+    # experiment name
+    exp_name = f"n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{seed}" if args.exp_name is None else args.exp_name
+    # log dir
+    log_dir = os.path.join(args.log_dir, args.env_name, exp_name)
+
+    random_strategy = RandomActionStrategy(None)
 
     # create the model
-    h_g = 64
-    h_l = 64
-    hidden_size = 128
-    std = 0.05
-    M = 1
-    log_dir = f'../runs/translated_mnist/ram_baseline/n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{seed}_re'
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    random_strategy = RandomActionStrategy(None, action_grid_size=(9, 9))
-    ram_model = RecurrentAttentionModel(env, h_g, h_l, std, hidden_size, random_strategy=random_strategy,
-                                        log_dir=log_dir, discrete_loc=False)
+    ram_model = RecurrentAttentionModel(env, **model_config, random_strategy=random_strategy,
+                                        log_dir=log_dir, discrete_loc=False).to(args.device)
 
     # train
-    n_epochs = 50
-    ram_model.learn(num_epochs=n_epochs,
-                    M=M,
-                    num_random_epochs=0,
-                    validate_every=2)
+    ram_model.learn(num_epochs=args.num_epochs,
+                    M=args.M,
+                    num_random_epochs=args.num_warmup_epochs,
+                    validate_every=args.validate_every)
+
+
+if __name__ == "__main__":
+    parser = get_arg_parser()
+    main(parser.parse_args())

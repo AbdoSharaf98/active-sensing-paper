@@ -20,7 +20,7 @@ DEFAULT_CONFIG = {
 
 # < ---------------------------------  environment registration  ------------------------------------- >
 
-ENV_ID = 'ActiveSensingMNIST-v0'
+ENV_ID = 'ActiveSensing-v0'
 
 gym.envs.register(ENV_ID, entry_point='envs.entry_points.active_sensing:ActiveSensingEnv')
 

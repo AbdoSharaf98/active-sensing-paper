@@ -1,0 +1,43 @@
+mnist:
+  n_samples: 4
+  batch_size: 64
+  val_batch_size: 64
+  sample_dim: 8
+  num_classes: 10
+  num_foveated_patches: 1
+  fovea_scale: 2
+  valid_frac: 0.1
+  num_workers: 0
+
+translated_mnist:
+  n_samples: 3
+  batch_size: 20
+  val_batch_size: 1000
+  sample_dim: 12
+  num_classes: 10
+  num_foveated_patches: 3
+  fovea_scale: 2
+  valid_frac: 0.1
+  num_workers: 0
+
+fashion_mnist:
+  n_samples: 8
+  batch_size: 64
+  val_batch_size: 1000
+  sample_dim: 6
+  num_classes: 10
+  num_foveated_patches: 1
+  fovea_scale: 2
+  valid_frac: 0.1
+  num_workers: 0
+
+cifar:
+  n_samples: 6
+  batch_size: 128
+  val_batch_size: 1000
+  sample_dim: 12
+  num_classes: 10
+  num_foveated_patches: 1
+  fovea_scale: 2
+  valid_frac: 0.1
+  num_workers: 0

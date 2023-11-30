@@ -1,0 +1,25 @@
+perception_model:
+  z_dim: 64
+  s_dim: 128
+  loc_dim: 2
+  encode_loc: False
+  lr: 0.001
+  vae_params:
+    summarization_method: 'mlp'
+    lower_vae:
+      layers: [256, 256]
+    higher_vae:
+      layers: [256, 256]
+      integration_method: 'sum'
+      rnn_hidden_size: 512
+      rnn_num_layers: 1
+
+action_model:
+  layers: [64, 32]
+  lr: 0.001
+  action_std: 0.05
+
+decision_model:
+  layers: [256, 256]
+  rnn_hidden_size: 64
+  lr: 0.001

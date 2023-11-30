@@ -10,7 +10,7 @@ class ActionStrategy:
     an abstract class for action selection strategy with Bayesian Action Selection
     """
 
-    def __init__(self, perception_model, action_grid_size):
+    def __init__(self, perception_model, action_grid_size=(9, 9)):
         self.perception_model = perception_model
         self.action_grid = ActionGrid(action_grid_size)
 
@@ -171,7 +171,7 @@ class DirectEvaluationStrategy(ActionStrategy):
 class RandomActionStrategy(ActionStrategy):
     """ selects a random action from the action grid """
 
-    def __init__(self, *args, discrete=True, **kwargs):
+    def __init__(self, *args, discrete=False, **kwargs):
         super(RandomActionStrategy, self).__init__(*args, **kwargs)
         self.discrete = discrete
 

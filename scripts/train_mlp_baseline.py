@@ -2,52 +2,79 @@ import os.path
 
 from colorama import Fore
 
-from utils.data import get_mnist_data, create_data_loaders
+from utils.data import get_mnist_data, create_data_loaders, get_cifar, get_fashion_mnist
 from nets import create_ff_network
 import torch
 import numpy as np
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+import argparse
 
-# get the dataset and create the data loaders
-dataset = get_mnist_data(data_version='translated')
 
-seeds = [1211, 1213, 1214, 1215]
-for seed in seeds:
-    torch.manual_seed(seed)
+def get_arg_parser():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--log_dir", type=str, default="./runs/mlp_baseline")
+    parser.add_argument("--exp_name", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--dataset", type=str, default="translated_mnist")
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--layers", nargs="*", type=int, default=[128, 128])
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--validate_every", type=float, default=2.0)
+    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--device", type=str, default="cuda")
+
+    return parser
+
+
+def main(args):
+
+    # get the dataset and create the data loaders
+    if args.dataset == "mnist":
+        dataset = get_mnist_data()
+    elif args.dataset == "translated_mnist":
+        dataset = get_mnist_data(data_version="translated")
+    elif args.dataset == "fashion_mnist":
+        dataset = get_fashion_mnist()
+    else:
+        dataset = get_cifar()
+
+    # set seed
+    seed = args.seed if args.seed is not None else np.random.randint(999)
     np.random.seed(seed)
+    torch.manual_seed(seed)
 
-    train_loader, valid_loader, test_loader = create_data_loaders(dataset, batch_size=64, num_workers=0)
+    train_loader, valid_loader, test_loader = create_data_loaders(dataset, batch_size=args.batch_size,
+                                                                  num_workers=0)
 
     # create the model
-    in_dim, out_dim = 60**2, 10
-    layers = [in_dim] + [128, 128] + [out_dim]
-    model = create_ff_network(layers, h_activation='relu', out_activation='softmax').to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    in_dim, out_dim = np.prod(next(iter(train_loader))[0].shape[-2:]), len(dataset[0].classes)
+    layers = [in_dim] + args.layers + [out_dim]
+    model = create_ff_network(layers, h_activation='relu', out_activation='softmax').to(args.device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    # logging directory
+    # experiment name
+    exp_name = f"{seed}" if args.exp_name is None else args.exp_name
+    # log dir
+    log_dir = os.path.join(args.log_dir, args.dataset, exp_name)
+
+    if not os.path.isdir(log_dir):
+        os.makedirs(log_dir)
 
     # train
-
-    save_dir = f"../runs/translated_mnist/mlp_baseline"
-    if not os.path.isdir(save_dir):
-        os.makedirs(save_dir)
-
-    train_accs = []
-    valid_accs = []
-    test_accs = []
-
-    validate_every = 25/len(train_loader)
-
-    num_epochs = 1
     num_train = len(train_loader)
-    validate_interval = int(validate_every * num_train)
+    validate_interval = int(args.validate_every * num_train)
+
+    train_accs, valid_accs, test_accs = [], [], []
 
     max_v = 0.0
     max_t = 0.0
     total_updates = 0
-    for epoch in range(num_epochs):
+    for epoch in range(args.num_epochs):
         epoch_accs = np.zeros((num_train,))
         for batch_num, (x, y) in enumerate(train_loader):
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(args.device), y.to(args.device)
 
             # forward the model
             predicted = model(x.flatten(start_dim=1))
@@ -63,7 +90,7 @@ for seed in seeds:
             total_updates += 1
 
             # compute the accuracy
-            accuracy = np.sum((torch.argmax(predicted, dim=-1) == y).cpu().numpy())/len(y)
+            accuracy = np.sum((torch.argmax(predicted, dim=-1) == y).cpu().numpy()) / len(y)
             epoch_accs[batch_num] = accuracy
 
             # print
@@ -76,15 +103,15 @@ for seed in seeds:
                 with torch.no_grad():
                     # validation
                     vx, vy = next(iter(valid_loader))
-                    vx, vy = vx.to(device), vy.to(device)
+                    vx, vy = vx.to(args.device), vy.to(args.device)
                     v_predicted = model(vx.flatten(start_dim=1))
-                    v_accuracy = np.sum((torch.argmax(v_predicted, dim=-1) == vy).cpu().numpy())/len(vy)
+                    v_accuracy = np.sum((torch.argmax(v_predicted, dim=-1) == vy).cpu().numpy()) / len(vy)
 
                     # test data
                     tx, ty = next(iter(test_loader))
-                    tx, ty = tx.to(device), ty.to(device)
+                    tx, ty = tx.to(args.device), ty.to(args.device)
                     t_predicted = model(tx.flatten(start_dim=1))
-                    t_accuracy = np.sum((torch.argmax(t_predicted, dim=-1) == ty).cpu().numpy())/len(ty)
+                    t_accuracy = np.sum((torch.argmax(t_predicted, dim=-1) == ty).cpu().numpy()) / len(ty)
 
                     valid_accs.append(v_accuracy)
                     test_accs.append(t_accuracy)
@@ -105,7 +132,9 @@ for seed in seeds:
         print('')
     torch.save({'train_accs': torch.tensor(train_accs),
                 'valid_accs': torch.tensor(valid_accs),
-                'test_accs': torch.tensor(test_accs)}, os.path.join(save_dir, f'data_{seed}'))
+                'test_accs': torch.tensor(test_accs)}, log_dir)
 
-print("DONE")
 
+if __name__ == "__main__":
+    parser = get_arg_parser()
+    main(parser.parse_args())

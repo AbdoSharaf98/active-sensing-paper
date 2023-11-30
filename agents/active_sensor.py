@@ -31,8 +31,7 @@ class BayesianActiveSensor(nn.Module):
         :param log_dir: directory to log training results
         :param checkpoint_dir: directory to checkpoint model during training
         :param device: device on which model components live
-        :param decider_input: whether the decider takes perception states as input or takes raw collected observations
-                              options are: 'perception', 'raw'
+        :param decider_input: whether the decider takes perception states as input
         """
 
         super().__init__()

@@ -20,7 +20,6 @@ DEFAULT_PARAMS = MappingProxyType({
     'higher_vae': {
         'layers': [256, 256],
         'integration_method': 'sum',
-        'summarization_method': 'mlp',
         'rnn_hidden_size': 512,
         'rnn_num_layers': 1
     }
@@ -57,7 +56,6 @@ class PerceptionModel(LightningModule):
                  vae_params: dict = DEFAULT_PARAMS,
                  vae1=None,
                  vae2=None,
-                 use_latents=True,  # whether to use the observation directly to infer s or map them through z
                  encode_loc=False,
                  lr=0.001,
                  ):
@@ -70,7 +68,6 @@ class PerceptionModel(LightningModule):
         self.s_dim = s_dim
         self.loc_dim = loc_dim
         self.obs_dim = obs_dim
-        self.use_latents = use_latents
         self.lr = lr
         self.automatic_optimization = False
 
@@ -78,7 +75,7 @@ class PerceptionModel(LightningModule):
         self.lower_summarizer = MlpSummarizer(obs_dim, loc_dim) if \
             vae_params['summarization_method'] == 'mlp' else CatSummarizer()
 
-        self.higher_summarizer = MlpSummarizer(z_dim if use_latents else obs_dim, loc_dim) if \
+        self.higher_summarizer = MlpSummarizer(z_dim, loc_dim) if \
             vae_params['summarization_method'] == 'mlp' else CatSummarizer()
 
         # build the location encoder
@@ -96,7 +93,7 @@ class PerceptionModel(LightningModule):
 
         # build the higher vae
         if vae2 is None:
-            self.vae2 = HigherVAE(self.z_dim if use_latents else obs_dim, self.loc_dim, self.s_dim,
+            self.vae2 = HigherVAE(self.z_dim, self.loc_dim, self.s_dim,
                                   summarizer=self.higher_summarizer,
                                   **vae_params['higher_vae'])
         else:
@@ -117,7 +114,7 @@ class PerceptionModel(LightningModule):
         self._trainer = trainer
 
     def parameter_list(self):
-        return list(self.vae2.parameters()) + int(self.use_latents) * list(self.vae1.parameters())
+        return list(self.vae2.parameters()) + list(self.vae1.parameters())
 
     def configure_optimizers(self, lr: float = None):
         if lr is None:
@@ -136,21 +133,14 @@ class PerceptionModel(LightningModule):
         locs = self.location_encoder(locs)
 
         # pass through the first vae
-        vae2_input = obs
-        z_posterior = None
-        z_latents = None
-        if self.use_latents:
-            _, z_latents, z_posterior = self.vae1(obs, locs)
-            vae2_input = z_latents
+        _, z_latents, z_posterior = self.vae1(obs, locs)
+        vae2_input = z_latents
 
         # pass through the second vae
         z_prior, s_latent, s_posterior, h = self.vae2(vae2_input, locs)
 
         # compute the reconstructions of the z latents
-        if self.use_latents:
-            recs = self.vae1.decode(z_prior.sample())
-        else:
-            recs = z_prior.mu
+        recs = self.vae1.decode(z_prior.sample())
 
         return recs, z_latents, z_posterior, h, z_prior, s_posterior
 
@@ -165,11 +155,8 @@ class PerceptionModel(LightningModule):
         rec_loss = mse_loss(recs, obs, reduction='none').sum(dim=[-2, -1]).mean()
 
         # compute the kl loss between the z posterior and prior
-        if self.use_latents:
-            z_kl_loss = (z_posterior.torch_dist.log_prob(z_latents)
-                         - z_prior.torch_dist.log_prob(z_latents)).sum(-1).mean()
-        else:
-            z_kl_loss = torch.tensor(0.0)
+        z_kl_loss = (z_posterior.torch_dist.log_prob(z_latents)
+                     - z_prior.torch_dist.log_prob(z_latents)).sum(-1).mean()
 
         # compute the kl loss between the s posterior and a standard gaussian
         s_mu, s_logvar = s_posterior.mu, torch.log(s_posterior.sigma ** 2)
@@ -178,7 +165,7 @@ class PerceptionModel(LightningModule):
         )
 
         # total loss
-        total_loss = rec_loss_scale * rec_loss + beta * s_kl_loss + 0.05 * z_kl_loss
+        total_loss = rec_loss_scale * rec_loss + beta * s_kl_loss + 0.001 * z_kl_loss
 
         return total_loss, rec_loss, z_kl_loss, s_kl_loss
 

@@ -1,10 +1,4 @@
-"""
-A script for training the perception model separately
-"""
-from copy import deepcopy
-
-from annealing_schedules import step_schedule, linear_cyclical_schedule
-from envs.active_sensing import mnist_active_sensing, cifar_active_sensing
+from envs.active_sensing import active_sensing_env
 
 from models import perception
 from models.perception import PerceptionModel
@@ -13,67 +7,90 @@ from models.action import RandomActionStrategy
 from utils.data import *
 from utils.training import train_perception_model
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# create the environment
-config = deepcopy(mnist_active_sensing.DEFAULT_CONFIG)
-config['batch_size'] = -1     # use entire dataset
-config['n_samples'] = n = 5
-config['sample_dim'] = d = 6
-config['num_foveated_patches'] = nfov = 1
-config['fovea_scale'] = fovsc = 2
-config['num_workers'] = 0
-config['valid_frac'] = 0.0
-config['dataset'] = get_fashion_mnist()
-env = mnist_active_sensing.make_env(config)
-
-# get data from the environment
-action_grid_sz = (33, 33)
-data_dict = collect_data(env, actor=RandomActionStrategy(None, action_grid_sz, discrete=False))
-
-# create or load the perception model
-z_dim = 64
-s_dim = 128
-d_action = 2
-d_obs = env.observation_space.shape[-1]
-
-# create the perception model
-vae_params = perception_v2.DEFAULT_PARAMS.copy()
-vae_params['lower_vae']['layers'] = [256, 256]
-vae_params['summarization_method']: 'cat'
-vae_params['higher_vae'] = {
-        'layers': [256, 256],
-        'integration_method': 'sum',
-        'rnn_hidden_size': 512,
-        'rnn_num_layers': 1,
-        'seq_len': n+1
-    }
+import argparse
+import yaml
 
 
-perception_model = PerceptionModel(z_dim, s_dim, d_action, d_obs, vae_params=vae_params,
-                                   lr=0.001, encode_loc=False, use_latents=True).to(device)
+def get_arg_parser():
+    parser = argparse.ArgumentParser()
 
-# perception model training
-log_dir = f'../perception_runs/fashion_mnist/n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_re'
+    parser.add_argument("--log_dir", type=str, default="./runs/perception_pretraining")
+    parser.add_argument("--exp_name", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--config_dir", type=str, default="./configs/bas.yaml")
+    parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
+    parser.add_argument("--env_name", type=str, default="mnist")
+    parser.add_argument("--discrete_action", action="store_true")
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--beta", type=float, default=0.1)
+    parser.add_argument("--rec_scale", type=float, default=1.0)
+    parser.add_argument("--device", type=str, default="cuda")
 
-# training params
-epochs = 10
-batch_size = 64
-beta_sched = 1.1 * np.ones((epochs,)) #linear_cyclical_schedule(epochs, stop=0.25)
-rec_scale = 1.0
+    return parser
 
-# train
-train_perception_model(perception_model,
-                       n_epochs=epochs,
-                       batch_size=batch_size,
-                       data=data_dict,
-                       log_dir=log_dir,
-                       exp_name='',
-                       beta_schedule=beta_sched,
-                       rec_loss_scale=rec_scale,
-                       train_size=len(data_dict['obs']) - 10000,
-                       dataset_class=ActiveSensingDataset,
-                       monitored_loss='total_loss')
 
+def main(args):
+    # create the environment
+    with open(args.env_config_dir, "r") as f:
+        env_config = yaml.safe_load(f)[args.env_name]
+    env_config['batch_size'] = -1
+    env_config['valid_frac'] = 0
+
+    if args.env_name == "mnist":
+        env_config['dataset'] = get_mnist_data()
+    elif args.env_name == "translated_mnist":
+        env_config['dataset'] = get_mnist_data(data_version="translated")
+    elif args.env_name == "fashion_mnist":
+        env_config['dataset'] = get_fashion_mnist()
+    else:
+        env_config['dataset'] = get_cifar()
+
+    n, d = env_config['n_samples'], env_config['sample_dim']
+    nfov, fovsc = env_config['num_foveated_patches'], env_config['fovea_scale']
+
+    env = active_sensing_env.make_env(env_config)
+
+    # set seed
+    seed = args.seed if args.seed is not None else np.random.randint(999)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    env.seed(seed)
+
+    # collect data from the environment
+    action_grid_sz = (33, 33)
+    data_dict = collect_data(env, actor=RandomActionStrategy(None, action_grid_sz, discrete=args.discrete_action))
+
+    # create perception model
+    with open(args.config_dir, "r") as f:
+        model_config = yaml.safe_load(f)['perception_model']
+    model_config['obs_dim'] = env.observation_space.shape[-1]
+    model_config['vae_params']['higher_vae']['seq_len'] = n + 1
+    perception_model = PerceptionModel(**model_config).to(args.device)
+
+    # logging directory
+    # experiment name
+    exp_name = f"n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{seed}" if args.exp_name is None else args.exp_name
+
+    # log dir
+    log_dir = os.path.join(args.log_dir, args.env_name, exp_name)
+
+    # training
+    beta_sched = args.beta * np.ones((args.num_epochs,))
+    train_perception_model(perception_model,
+                           n_epochs=args.num_epochs,
+                           batch_size=args.batch_size,
+                           data=data_dict,
+                           log_dir=log_dir,
+                           exp_name='',
+                           beta_schedule=beta_sched,
+                           rec_loss_scale=args.rec_scale,
+                           train_size=len(data_dict['obs']),
+                           dataset_class=ActiveSensingDataset,
+                           monitored_loss='total_loss')
+
+
+if __name__ == "__main__":
+    parser = get_arg_parser()
+    args = parser.parse_args()
+    main(args)
