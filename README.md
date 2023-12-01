@@ -77,6 +77,10 @@ To pre-train the perception model on the active vision task, run the command:
 
 This will create and pre-train a perception model with the ELBO objective on fixation sequences collected randomly from the `mnist` dataset. You can pre-train on other datasets, e.g. `translated_mnist`, `cifar`, or `fashion_mnist`, by specifiying the `--env_name` argument. The hyperparameters for the perception model can be adjusted in the ['bas.yaml'](./configs/bas.yaml) config file in the `configs` folder. The parameters for the different active vision datasets can be specified in the ['envs.yaml'](./configs/envs.yaml) config file. You can specifiy a random seed using the argument `--seed`; otherwise, the script will choose a random seed for you. You can also specify a path where training progress is logged and model checkpoints are saved using the arguments `--log_dir` and `--exp_name`. Otherwise, the script will create an `exp_name` based on the experiment parameters and save to the directory `runs/perception_pretraining/{env_name}/exp_name`.
 
+To train an active vision agent using a pre-trained perception model on the downstream classification task, run the command:
+
+    python -m scripts.train_agent --env_name
+
 ## Reproducing the results
 
 Before running any code you must activate the conda environment:
