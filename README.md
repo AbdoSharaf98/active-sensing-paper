@@ -81,7 +81,21 @@ To train an active vision agent using a pre-trained perception model on the down
 
     python -m scripts.train_agent --env_name mnist --num_epochs 50 --validate_every 4 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config} --perception_path {path_to_pretrained_perception_model} --action_strategy bas --decision_strategy perception
 
-This will create an active vision agent with the pretrained perception model loaded from `{path_to_pretrained_perception_model}`. It will train the agent on the `mnist` dataset with the parameters specified in the config file at `{path_to_env_config}` (default config is ['envs.yaml'](./configs/envs.yaml)). The script will build the model based on the config file speficied with the `config_dir` argument; the default config is ['bas.yaml'](./configs/bas.yaml). You can specify the action selection strategy (`bas`, `random`) with the `--action_strategy` argument and the input to the downstream classifier using the `--decision_strategy` argument (`perception`, `rnn`, `concat`). 
+This will create an active vision agent with the pretrained perception model loaded from `{path_to_pretrained_perception_model}`. It will train the agent on the `mnist` dataset with the parameters specified in the config file at `{path_to_env_config}` (default config is ['envs.yaml'](./configs/envs.yaml)). The script will build the model based on the config file speficied with the `config_dir` argument; the default config is ['bas.yaml'](./configs/bas.yaml). You can specify the action selection strategy (`bas`, `random`) with the `--action_strategy` argument and the input to the downstream classifier using the `--decision_strategy` argument (`perception`, `rnn`, `concat`). If the `--perception_path` argument is not specified (i.e. no pretrained perception model is provided), the script will create a new perception model with the parameters specified in the model config. 
+
+To train the [Recurrent Attention Model (RAM)](https://arxiv.org/abs/1406.6247) on the active vision task, run the command: 
+
+    python -m scripts.train_ram --env_name translated_mnist --num_epochs 50 --validate_every 2 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config}
+
+This will create a RAM model and train it on the `translated_mnist` dataset. The default config file for this model is ['ram.yaml'](./configs/bas.yaml). 
+
+As part of our learning speed and data efficiency analyses, we train a standard feedforward network (MLP) on the `translated_mnist` classification task with full images as input. To perform this training, run the command:
+
+    python -m scripts.train_mlp_baseline --dataset translated_mnist --batch_size 64 --layers 128 128 --lr 0.001 --num_epochs 50 --validate_every 2
+
+All the scripts mentioned above can take additional optional arguments. For a list of all arguments accepted by a script, run the command:
+
+    python -m scripts.{script_name} --help
 
 ## Reproducing the results
 
