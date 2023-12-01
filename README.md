@@ -81,7 +81,7 @@ To train an active vision agent using a pre-trained perception model on the down
 
     python -m scripts.train_agent --env_name mnist --num_epochs 50 --validate_every 4 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config} --perception_path {path_to_pretrained_perception_model} --action_strategy bas --decision_strategy perception
 
-This will create an active vision agent with the pretrained perception model loaded from `{path_to_pretrained_perception_model}`. It will train the agent on the `mnist` dataset with the parameters specified in the config file at `{path_to_env_config}` (default config is ['envs.yaml'](./configs/envs.yaml)). The agent's hyperparameters can be specified in the config file at `{path_to_model_config`}, the default being ['bas.yaml'](./configs/bas.yaml). 
+This will create an active vision agent with the pretrained perception model loaded from `{path_to_pretrained_perception_model}`. It will train the agent on the `mnist` dataset with the parameters specified in the config file at `{path_to_env_config}` (default config is ['envs.yaml'](./configs/envs.yaml)). The script will build the model based on the config file speficied with the `config_dir` argument; the default config is ['bas.yaml'](./configs/bas.yaml). You can specify the action selection strategy (`bas`, `random`) with the `--action_strategy` argument and the input to the downstream classifier using the `--decision_strategy` argument (`perception`, `rnn`, `concat`). 
 
 ## Reproducing the results
 
