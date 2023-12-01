@@ -69,7 +69,13 @@ To create and run CMC exploration agents with BAS, Boltzmann, and Random action 
 
     python -m scripts.run_cmc_explorer --env maze --verbose --total_steps 3000
     
-This will create and run the three agents in the maze environment for a total of 3000 time steps. By specifiying the `--verbose` argument, the script will also print the learning progress and number of visited states throughout the episode, similar to Figure 4 in the paper. The hyperparameters for the models and the environments can be specified in the [`cmc.yaml`](./configs/cmc.yml) config file in the `configs` folder. If no `--config_dir` argument is specified, this is the default config file used by the script.
+This will create and run the three agents in the maze environment for a total of 3000 time steps. By specifiying the `--verbose` argument, the script will also print the learning progress and number of visited states throughout the episode, similar to Figure 4 in the paper. The hyperparameters for the models and the environments can be specified in the [`cmc.yaml`](./configs/cmc.yaml) config file in the `configs` folder. If no `--config_dir` argument is specified, this is the default config file used by the script. The script takes additional optional arguments 
+
+To pre-train the perception model on the active vision task, run the command:
+
+    python -m scripts.train_perception --env_name mnist --num_epochs 10 --batch_size 64
+
+This will create and pre-train a perception model with the ELBO objective on fixation sequences collected randomly from the `mnist` dataset. You can pre-train on other datasets, e.g. `translated_mnist`, `cifar`, or `fashion_mnist`, by specifiying the `--env_name` argument. The hyperparameters for the perception model can be adjusted in the ['bas.yaml'](./configs/bas.yaml) config file in the `configs` folder. The parameters for the different active vision datasets can be specified in the ['envs.yaml'](./configs/envs.yaml) config file. You can specifiy a random seed using the argument `--seed`; otherwise, the script will choose a random seed for you. You can also specify a path where training progress is logged and model checkpoints are saved using the arguments `--log_dir` and `--exp_name`. Otherwise, the script will create an `exp_name` based on the experiment parameters and save to the directory `runs/perception_pretraining/{env_name}/exp_name`.
 
 ## Reproducing the results
 
