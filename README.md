@@ -22,7 +22,7 @@ We present an end-to-end procedure for embodied exploration inspired by two biol
 
 ## Software implementation
 
-All code is written in Python using [PyTorch](pytroch.org). Our active sensing algorithms for CMC exploration and active vision are implemented in the `agents` folder. All tasks are implemented as [Gym](https://www.gymlibrary.dev/index.html) environments and are included in the `envs` folder. All components of our CMC exploration agent are in one file [`agents/cmc_explorer`](./agents/cmc_explorer.py). The components of the active vision model are implemented in the `models` folder. Scripts used to train the various models in baselines are included in the `scripts` folder.
+All code is written in Python using [PyTorch](pytroch.org). Our active sensing algorithms for CMC exploration and active vision are implemented in the `agents` folder. All tasks are implemented as [Gym](https://www.gymlibrary.dev/index.html) environments and are included in the `envs` folder. All components of our CMC exploration agent are in one file [`agents/cmc_explorer`](./agents/cmc_explorer.py). The components of the active vision model are implemented in the `models` folder. Scripts used to train the various models and baselines are included in the `scripts` folder.
 
 ## Getting the code
 
