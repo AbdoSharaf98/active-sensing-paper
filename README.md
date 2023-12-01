@@ -65,6 +65,10 @@ Alternatively, we also provide a `requirements.txt` file which you can use to in
 
 ## Creating and training models
 
+To create and run CMC exploration agents with BAS, Boltzmann, and Random action strategies, run the command
+    python -m scripts.run_cmc_explorer --env maze --verbose --total_steps 3000
+This will create and run the three agents in the maze environment for a total of 3000 time steps. By specifiying the `--verbose` argument, the script will also print the learning progress and number of visited states throughout the episode, similar to Figure 4 in the paper. The hyperparameters for the models and the environments can be specified in the [`cmc.yml`](./configs/cmc.yml) config file in the `configs` folder. If no `--config_dir` argument is specified, this is the default config file used by the script.
+
 ## Reproducing the results
 
 Before running any code you must activate the conda environment:
