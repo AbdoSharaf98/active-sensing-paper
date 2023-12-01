@@ -87,7 +87,7 @@ To train the [Recurrent Attention Model (RAM)](https://arxiv.org/abs/1406.6247) 
 
     python -m scripts.train_ram --env_name translated_mnist --num_epochs 50 --validate_every 2 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config}
 
-This will create a RAM model and train it on the `translated_mnist` dataset. The default config file for this model is ['ram.yaml'](./configs/bas.yaml). 
+This will create a RAM model and train it on the `translated_mnist` dataset. The default config file for this model is ['ram.yaml'](./configs/ram.yaml). 
 
 As part of our learning speed and data efficiency analyses, we train a standard feedforward network (MLP) on the `translated_mnist` classification task with full images as input. To perform this training, run the command:
 
