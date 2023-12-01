@@ -5,9 +5,7 @@ Abdelrahman Sharafeldin,
 Nabil Imam,
 and Hannah Choi.
 
-This repository is the official implementation of our paper [Active Sensing with Predictive Coding and Uncertainty Minimization](https://arxiv.org/abs/2307.00668).
-
-This paper has been submitted for publication in [Patterns](https://www.cell.com/patterns/home).
+This repository is the official implementation of the preprint [Active Sensing with Predictive Coding and Uncertainty Minimization](https://arxiv.org/abs/2307.00668).
 
 In this paper, we developed an end-to-end perception-action framework for embodied exploration based on two theories from computational neuroscience: predictive coding for perception and uncertainty minimization for action. We apply this framework to two exploration settings: discrete-action Controllable Markov Chains (CMCs), and continuous-action active vision tasks. 
 
