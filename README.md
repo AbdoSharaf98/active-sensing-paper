@@ -99,52 +99,10 @@ All the scripts mentioned above can take additional optional arguments. For a li
 
 ## Reproducing the results
 
-Before running any code you must activate the conda environment:
-
-    source activate ENVIRONMENT_NAME
-
-or, if you're on Windows:
-
-    activate ENVIRONMENT_NAME
-
-This will enable the environment for your current terminal session.
-Any subsequent commands will use software that is installed in the environment.
-
-To build and test the software, produce all results and figures, and compile
-the manuscript PDF, run this in the top level of the repository:
-
-    make all
-
-If all goes well, the manuscript PDF will be placed in `manuscript/output`.
-
-You can also run individual steps in the process using the `Makefile`s from the
-`code` and `manuscript` folders. See the respective `README.md` files for
-instructions.
-
-Another way of exploring the code results is to execute the Jupyter notebooks
-individually.
-To do this, you must first start the notebook server by going into the
-repository top level and running:
-
-    jupyter notebook
-
-This will start the server and open your default web browser to the Jupyter
-interface. In the page, go into the `code/notebooks` folder and select the
-notebook that you wish to view/run.
-
-The notebook is divided into cells (some have text while other have code).
-Each cell can be executed using `Shift + Enter`.
-Executing text cells does nothing and executing code cells runs the code
-and produces it's output.
-To execute the whole notebook, run all cells in order.
-
+[//]: <> (TODO)
 
 ## License
 
-All source code is made available under a BSD 3-clause license. You can freely
+All source code is made available under an MIT license. You can freely
 use and modify the code, without warranty, so long as you provide attribution
 to the authors. See `LICENSE.md` for the full license text.
-
-The manuscript text is not open source. The authors reserve the rights to the
-article content, which is currently submitted for publication in the
-JOURNAL NAME.
