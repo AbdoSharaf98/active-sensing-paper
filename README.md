@@ -73,13 +73,15 @@ This will create and run the three agents in the maze environment for a total of
 
 To pre-train the perception model on the active vision task, run the command:
 
-    python -m scripts.train_perception --env_name mnist --num_epochs 10 --batch_size 64
+    python -m scripts.train_perception --env_name mnist --num_epochs 10 --batch_size 64 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config}
 
 This will create and pre-train a perception model with the ELBO objective on fixation sequences collected randomly from the `mnist` dataset. You can pre-train on other datasets, e.g. `translated_mnist`, `cifar`, or `fashion_mnist`, by specifiying the `--env_name` argument. The hyperparameters for the perception model can be adjusted in the ['bas.yaml'](./configs/bas.yaml) config file in the `configs` folder. The parameters for the different active vision datasets can be specified in the ['envs.yaml'](./configs/envs.yaml) config file. You can specifiy a random seed using the argument `--seed`; otherwise, the script will choose a random seed for you. You can also specify a path where training progress is logged and model checkpoints are saved using the arguments `--log_dir` and `--exp_name`. Otherwise, the script will create an `exp_name` based on the experiment parameters and save to the directory `runs/perception_pretraining/{env_name}/exp_name`.
 
 To train an active vision agent using a pre-trained perception model on the downstream classification task, run the command:
 
-    python -m scripts.train_agent --env_name
+    python -m scripts.train_agent --env_name mnist --num_epochs 50 --validate_every 4 --config_dir {path_to_model_config} --env_config_dir {path_to_env_config} --perception_path {path_to_pretrained_perception_model} --action_strategy bas --decision_strategy perception
+
+This will create an active vision agent with the pretrained perception model loaded from `{path_to_pretrained_perception_model}`. It will train the agent on the `mnist` dataset with the parameters specified in the config file at `{path_to_env_config}` (default config is ['envs.yaml'](./configs/envs.yaml)). The agent's hyperparameters can be specified in the config file at `{path_to_model_config`}, the default being ['bas.yaml'](./configs/bas.yaml). 
 
 ## Reproducing the results
 
