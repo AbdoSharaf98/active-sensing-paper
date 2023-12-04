@@ -33,9 +33,6 @@ You can download a copy of all the files in this repository by cloning the
 
 or [download a zip archive](https://github.com/AbdoSharaf98/active-sensing-paper/archive/refs/heads/main.zip).
 
-> A copy of the repository is also archived at *insert DOI here*
-
-
 ## Dependencies
 
 You'll need a working Python environment to run the code.
@@ -95,7 +92,7 @@ All the scripts mentioned above can take additional optional arguments. For a li
 
     python -m scripts.{script_name} --help
 
-## Reproducing the results
+[//]: <> (TODO: ## Reproducing the results)
 
 [//]: <> (TODO)
 
