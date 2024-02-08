@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from random import shuffle
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset, TensorDataset, random_split, DataLoader, SubsetRandomSampler
@@ -88,7 +89,9 @@ class GymDataModule(LightningDataModule):
 def get_mnist_data(data_dir=None,
                    transform=True,
                    data_version='centered',
-                   translate_size=60):
+                   translate_size=60,
+                   num_clutter=4,
+                   clutter_size=8):
     class Translate(object):
         def __init__(self, output_size, vmin):
             super(Translate, self).__init__()
@@ -102,6 +105,40 @@ def get_mnist_data(data_dir=None,
             loch = np.random.randint(0, 33)
             locw = np.random.randint(0, 33)
             x_t[:, loch:loch + H, locw:locw + W] = x
+            return x_t
+    
+    class Clutter(object):
+        def __init__(self, output_size, num_clutter, clutter_sz, vmin):
+            super(Clutter, self).__init__()
+            self.vmin = vmin
+            self.output_size = output_size
+            self.num_clutter = num_clutter
+            self.clutter_sz = clutter_sz
+            
+        def __call__(self, x):
+            C, H, W = x.size()
+            clutter_patches = []
+            ind = H - self.clutter_sz + 1
+            
+            for _ in range(self.num_clutter):
+                [r, c] = np.random.randint(0, ind, 2)
+                clutter_patches += [x[:, r:r+self.clutter_sz, c:c+self.clutter_sz]]
+            shuffle(clutter_patches)
+            x_t = -torch.ones(C, self.output_size, self.output_size)
+            torch.fill_(x_t, self.vmin)
+            
+            ind = self.output_size - H + 1
+            ind_ = self.output_size - self.clutter_sz + 1
+            
+            [loch, locw] = np.random.randint(0, ind, 2)
+            x_t[:, loch:loch+H, locw:locw+W] = x
+            
+            for _ in range(self.num_clutter):
+                [r, c] = np.random.randint(0, ind_, 2)
+                x_t[:, r:r+self.clutter_sz, c:c+self.clutter_sz] = torch.max(x_t[:, r:r+self.clutter_sz,
+                                                                                 c:c+self.clutter_sz],
+                                                                             clutter_patches.pop())
+            
             return x_t
 
     if data_dir is None:
@@ -130,6 +167,15 @@ def get_mnist_data(data_dir=None,
         ])
         train_dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
         test_dataset = datasets.MNIST(root=data_dir, train=False, download=True, transform=data_transformer)
+    elif data_version == 'cluttered':
+        clutterer = Clutter(translate_size, num_clutter, clutter_size, v_min)
+        data_transformer = transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+            clutterer
+        ])
+        train_dataset = datasets.MNIST(root=data_dir, train=True, download=True, transform=data_transformer)
+        test_dataset = datasets.MNIST(root=data_dir, train=False, download=True, transform=data_transformer)        
 
     return train_dataset, test_dataset
 

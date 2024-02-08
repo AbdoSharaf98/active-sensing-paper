@@ -20,6 +20,17 @@ translated_mnist:
   valid_frac: 0.1
   num_workers: 0
 
+cluttered_mnist:
+  n_samples: 12
+  batch_size: 64
+  val_batch_size: 1000
+  sample_dim: 12
+  num_classes: 10
+  num_foveated_patches: 3
+  fovea_scale: 2
+  valid_frac: 0.1
+  num_workers: 0
+
 fashion_mnist:
   n_samples: 8
   batch_size: 64

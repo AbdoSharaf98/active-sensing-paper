@@ -53,7 +53,6 @@ def main(args):
     seed = args.seed if args.seed is not None else np.random.randint(999)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    env.seed(seed)
 
     # load the config file
     with open(args.config_dir, "r") as f:

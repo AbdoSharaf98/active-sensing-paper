@@ -28,6 +28,6 @@ gym.envs.register(ENV_ID, entry_point='envs.entry_points.active_sensing:ActiveSe
 # < ---------------------------------  env maker   ------------------------------------- >
 def make_env(env_config=None):
     if env_config is None:
-        return gym.make(ENV_ID, **DEFAULT_CONFIG)
+        return gym.make(ENV_ID, **DEFAULT_CONFIG).unwrapped
     else:
-        return gym.make(ENV_ID, **env_config)
+        return gym.make(ENV_ID, **env_config).unwrapped

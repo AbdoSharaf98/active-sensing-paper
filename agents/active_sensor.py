@@ -21,7 +21,8 @@ class BayesianActiveSensor(nn.Module):
                  log_dir: str,
                  checkpoint_dir: str = None,
                  device: str = 'cuda',
-                 decider_input: str = 'perception'):
+                 decider_input: str = 'perception',
+                 e2e_finetuning: bool = False):
         """
 
         :param env: active sensing environment the agent is in
@@ -42,6 +43,7 @@ class BayesianActiveSensor(nn.Module):
         self.decider = decider
         self.device = device
         self.decider_input = decider_input
+        self.e2e_finetuning = e2e_finetuning
 
         # create a logger
         if not os.path.isdir(log_dir):
@@ -176,6 +178,8 @@ class BayesianActiveSensor(nn.Module):
                                                                                        actions,
                                                                                        beta=beta)
         if update:
+            
+            self.perception_model.manual_optimizer.zero_grad()
 
             # optimize the decider
             if not random_action:
@@ -184,7 +188,9 @@ class BayesianActiveSensor(nn.Module):
                 self.decider.optimizer.step()
 
             # optimize the perception model
-            self.perception_model.manual_optimizer.zero_grad()
+            if not self.e2e_finetuning:
+                # if we aare not finetuning end-to-end, reset the perception model's gradients
+                self.perception_model.manual_optimizer.zero_grad()
             p_loss.backward()
             # clip gradients to prevent gradient explosion
             # nn.utils.clip_grad_norm_(self.perception_model.parameter_list(), 10)

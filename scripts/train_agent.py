@@ -30,6 +30,7 @@ def get_arg_parser():
     parser.add_argument("--perception_path", type=str, default=None)
     parser.add_argument("--action_strategy", type=str, default="bas")
     parser.add_argument("--decision_strategy", type=str, default="perception")
+    parser.add_argument("--finetune_e2e", default=False, action="store_true")
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--num_warmup_epochs", type=int, default=0)
     parser.add_argument("--beta", type=float, default=0.1)
@@ -63,7 +64,6 @@ def main(parser):
     seed = args.seed if args.seed is not None else np.random.randint(999)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    env.seed(seed)
 
     # load the config file
     with open(args.config_dir, "r") as f:
@@ -123,6 +123,7 @@ def main(parser):
     # build the active sensor model
     active_sensor = BayesianActiveSensor(env, perception_model, actor, decider,
                                          log_dir=log_dir, checkpoint_dir=log_dir,
+                                         e2e_finetuning=args.finetune_e2e,
                                          device=args.device, decider_input=args.decision_strategy)
 
     # train

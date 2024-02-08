@@ -55,7 +55,6 @@ def main(args):
     seed = args.seed if args.seed is not None else np.random.randint(999)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    env.seed(seed)
 
     # collect data from the environment
     action_grid_sz = (33, 33)
