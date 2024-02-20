@@ -21,17 +21,20 @@ import argparse
 def get_arg_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--log_dir", type=str, default="./runs/bas")
-    parser.add_argument("--exp_name", type=str, default=None)
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--config_dir", type=str, default="./configs/bas.yaml")
-    parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
-    parser.add_argument("--env_name", type=str, default="mnist")
-    parser.add_argument("--perception_path", type=str, default=None)
+    parser.add_argument("--log_dir", type=str, default="../runs")
+    parser.add_argument("--exp_name", type=str, default="bas_rnn_n=12_d=12_412")
+    parser.add_argument("--seed", type=int, default=412)
+    parser.add_argument("--config_dir", type=str, default="../configs/bas.yaml")
+    parser.add_argument("--env_config_dir", type=str, default="../configs/envs.yaml")
+    parser.add_argument("--env_name", type=str, default="cluttered_mnist")
+    parser.add_argument("--perception_path", type=str,
+                        default="../runs/perception_pretraining/cluttered_mnist/n=6_d=12_nfov=3_fovsc=2_412/last.ckpt")
+    parser.add_argument("--load_model", type=str,
+                        default=None)
     parser.add_argument("--action_strategy", type=str, default="bas")
-    parser.add_argument("--decision_strategy", type=str, default="perception")
+    parser.add_argument("--decision_strategy", type=str, default="rnn")
     parser.add_argument("--finetune_e2e", default=False, action="store_true")
-    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_epochs", type=int, default=200)
     parser.add_argument("--num_warmup_epochs", type=int, default=0)
     parser.add_argument("--beta", type=float, default=0.1)
     parser.add_argument("--validate_every", type=float, default=4)
@@ -52,8 +55,12 @@ def main(parser):
         env_config['dataset'] = get_mnist_data(data_version="translated")
     elif args.env_name == "fashion_mnist":
         env_config['dataset'] = get_fashion_mnist()
-    else:
+    elif args.env_name == "cluttered_mnist":
+        env_config['dataset'] = get_mnist_data(data_version="cluttered")
+    elif args.env_name == "cifar":
         env_config['dataset'] = get_cifar()
+    else:
+        raise
 
     n, d = env_config['n_samples'], env_config['sample_dim']
     nfov, fovsc = env_config['num_foveated_patches'], env_config['fovea_scale']
@@ -86,7 +93,7 @@ def main(parser):
                                       lr=action_config['lr'],
                                       out_dist='gaussian',
                                       action_std=action_config['action_std'])
-    elif args.action_stragey == "random":
+    elif args.action_strategy == "random":
         actor = RandomActionStrategy(perception_model)  # for random action strategy
     else:
         raise parser.error(message="Invalid action strategy. Valid input can be one of "
@@ -125,6 +132,9 @@ def main(parser):
                                          log_dir=log_dir, checkpoint_dir=log_dir,
                                          e2e_finetuning=args.finetune_e2e,
                                          device=args.device, decider_input=args.decision_strategy)
+
+    if args.load_model is not None:
+        active_sensor.load_from_checkpoint_dict(torch.load(args.load_model))
 
     # train
     beta_sched = args.beta * np.ones((args.num_epochs,))

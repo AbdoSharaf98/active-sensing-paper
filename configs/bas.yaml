@@ -1,9 +1,9 @@
 perception_model:
-  z_dim: 64
-  s_dim: 128
+  z_dim: 128
+  s_dim: 256
   loc_dim: 2
   encode_loc: False
-  lr: 0.001
+  lr: 0.0003
   vae_params:
     summarization_method: 'mlp'
     lower_vae:
@@ -22,4 +22,4 @@ action_model:
 decision_model:
   layers: [256, 256]
   rnn_hidden_size: 64
-  lr: 0.001
+  lr: 0.0003

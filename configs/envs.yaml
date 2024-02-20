@@ -11,7 +11,7 @@ mnist:
 
 translated_mnist:
   n_samples: 3
-  batch_size: 20
+  batch_size: 64
   val_batch_size: 1000
   sample_dim: 12
   num_classes: 10

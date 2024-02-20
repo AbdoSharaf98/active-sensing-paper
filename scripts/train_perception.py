@@ -3,6 +3,7 @@ from envs.active_sensing import active_sensing_env
 from models import perception
 from models.perception import PerceptionModel
 from models.action import RandomActionStrategy
+from annealing_schedules import ramp_schedule
 
 from utils.data import *
 from utils.training import train_perception_model
@@ -14,17 +15,17 @@ import yaml
 def get_arg_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--log_dir", type=str, default="./runs/perception_pretraining")
+    parser.add_argument("--log_dir", type=str, default="../runs/perception_pretraining")
     parser.add_argument("--exp_name", type=str, default=None)
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--config_dir", type=str, default="./configs/bas.yaml")
-    parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
-    parser.add_argument("--env_name", type=str, default="mnist")
+    parser.add_argument("--seed", type=int, default=412)
+    parser.add_argument("--config_dir", type=str, default="../configs/bas.yaml")
+    parser.add_argument("--env_config_dir", type=str, default="../configs/envs.yaml")
+    parser.add_argument("--env_name", type=str, default="cluttered_mnist")
     parser.add_argument("--discrete_action", action="store_true")
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--beta", type=float, default=0.1)
-    parser.add_argument("--rec_scale", type=float, default=1.0)
+    parser.add_argument("--rec_scale", type=float, default=2.0)
     parser.add_argument("--device", type=str, default="cuda")
 
     return parser
@@ -43,8 +44,12 @@ def main(args):
         env_config['dataset'] = get_mnist_data(data_version="translated")
     elif args.env_name == "fashion_mnist":
         env_config['dataset'] = get_fashion_mnist()
-    else:
+    elif args.env_name == "cluttered_mnist":
+        env_config['dataset'] = get_mnist_data(data_version="cluttered")
+    elif args.env_name == "cifar":
         env_config['dataset'] = get_cifar()
+    else:
+        raise
 
     n, d = env_config['n_samples'], env_config['sample_dim']
     nfov, fovsc = env_config['num_foveated_patches'], env_config['fovea_scale']
@@ -75,7 +80,7 @@ def main(args):
     log_dir = os.path.join(args.log_dir, args.env_name, exp_name)
 
     # training
-    beta_sched = args.beta * np.ones((args.num_epochs,))
+    beta_sched = ramp_schedule(args.num_epochs, epoch_thresh=5, stop=args.beta) #args.beta * np.ones((args.num_epochs,))
     train_perception_model(perception_model,
                            n_epochs=args.num_epochs,
                            batch_size=args.batch_size,
