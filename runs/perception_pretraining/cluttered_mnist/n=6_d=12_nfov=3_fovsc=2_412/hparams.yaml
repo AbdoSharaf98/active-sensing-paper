@@ -1,0 +1,22 @@
+encode_loc: false
+loc_dim: 2
+lr: 0.0003
+obs_dim: 432
+s_dim: 256
+vae1: null
+vae2: null
+vae_params:
+  higher_vae:
+    integration_method: sum
+    layers:
+    - 256
+    - 256
+    rnn_hidden_size: 512
+    rnn_num_layers: 1
+    seq_len: 7
+  lower_vae:
+    layers:
+    - 256
+    - 256
+  summarization_method: mlp
+z_dim: 128
