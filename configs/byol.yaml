@@ -1,0 +1,32 @@
+agent:
+    lr: 0.0003
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_eps: 0.15
+    ent_coef: 0.01
+    vf_coef: 0.5
+    target_update_rate: 0.001
+  
+encoders:
+    latent_dim: 256
+    layers: [256, 256]
+    activation: 'relu'
+  
+actor_critic:
+    actor_std: 0.05
+    actor_layers: [64, 32]
+    critic_layers: [256, 256]
+    lr: 0.001
+    activation: 'relu'
+
+world_model:
+    activation: 'relu'
+    layers: [256, 256]
+
+decision_model:
+    layers: [256, 256]
+    rnn_hidden_size: 64
+    lr: 0.001
+
+  
+  

@@ -22,7 +22,7 @@ translated_mnist:
 
 cluttered_mnist:
   n_samples: 12
-  batch_size: 64
+  batch_size: 128
   val_batch_size: 1000
   sample_dim: 12
   num_classes: 10

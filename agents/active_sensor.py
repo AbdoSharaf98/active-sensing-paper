@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+from pytorch_lightning.loggers.csv_logs import CSVLogger
 from envs.entry_points.active_sensing import ActiveSensingEnv
 from models.action import ActionStrategy, ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
 from models.perception import PerceptionModel
@@ -49,6 +50,7 @@ class BayesianActiveSensor(nn.Module):
         if not os.path.isdir(log_dir):
             os.makedirs(log_dir)
         self.logger = SummaryWriter(log_dir=log_dir)
+        self.test_logger = CSVLogger(log_dir, name='', version='')
 
         # checkpointing dir
         self.checkpoint_dir = checkpoint_dir if checkpoint_dir is not None else log_dir
@@ -226,6 +228,7 @@ class BayesianActiveSensor(nn.Module):
 
     def learn(self,
               num_epochs: int,
+              start_epoch: int = 0,
               entropy_thresh: float = None,
               log_every: float = 5,
               validate_every: float = 3,
@@ -263,8 +266,8 @@ class BayesianActiveSensor(nn.Module):
         best_model_checkpoint = {}
 
         # training loop
-        total_updates = 0
-        for epoch in range(num_epochs):
+        total_updates = num_updates_per_epoch * start_epoch
+        for epoch in range(start_epoch, num_epochs):
 
             # will be used to calculate avg training accuracy at the end of each epoch
             train_accs = torch.zeros((num_train,))
@@ -326,6 +329,9 @@ class BayesianActiveSensor(nn.Module):
                     self.logger.add_scalar('test/accuracy', avg_tst_accuracy, total_updates)
                     self.logger.add_scalar('test/decision_loss', avg_tst_loss, total_updates)
                     self.logger.add_scalar('test/steps', avg_tst_steps, total_updates)
+                    
+                    self.test_logger.log_metrics({'test_accuracy': avg_tst_accuracy}, step=total_updates / num_updates_per_epoch)
+                    self.test_logger.save()
 
             # print a new line for the next epoch
             print('')

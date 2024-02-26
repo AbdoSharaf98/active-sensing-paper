@@ -7,13 +7,11 @@ import yaml
 from envs.active_sensing import active_sensing_env
 from utils.data import get_mnist_data, get_fashion_mnist, get_kmnist_data, get_cifar
 
-from models.perception import PerceptionModel
+from agents import ppo_byol_explore as byolex
 
 from models.action import ActionNetworkStrategy, DirectEvaluationStrategy, RandomActionStrategy
 
 from nets import ConcatDecisionNetwork, FFDecisionNetwork, RNNDecisionNetwork
-
-from agents.active_sensor import BayesianActiveSensor
 
 import argparse
 
@@ -24,20 +22,15 @@ def get_arg_parser():
     parser.add_argument("--log_dir", type=str, default="./runs")
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=412)
-    parser.add_argument("--config_dir", type=str, default="./configs/bas.yaml")
+    parser.add_argument("--config_dir", type=str, default="./configs/byol.yaml")
     parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
-    parser.add_argument("--env_name", type=str, default="cluttered_mnist")
-    parser.add_argument("--perception_path", type=str,
-                        default="./runs/pretraining/cluttered_mnist/n=6_d=12_nfov=3_fovsc=2_412/last.ckpt")
+    parser.add_argument("--env_name", type=str, default="translated_mnist")
     parser.add_argument("--load_model", type=str,
                         default=None)
-    parser.add_argument("--action_strategy", type=str, default="bas")
-    parser.add_argument("--decision_strategy", type=str, default="perception")
-    parser.add_argument("--finetune_e2e", default=False, action="store_true")
+    parser.add_argument("--decision_strategy", type=str, default="concat")
     parser.add_argument("--start_epoch", type=int, default=0)
     parser.add_argument("--num_epochs", type=int, default=200)
-    parser.add_argument("--num_warmup_epochs", type=int, default=0)
-    parser.add_argument("--beta", type=float, default=0.1)
+    parser.add_argument("--num_warmup_epochs", type=int, default=20)
     parser.add_argument("--validate_every", type=float, default=4)
     parser.add_argument("--device", type=str, default="cuda")
 
@@ -77,30 +70,20 @@ def main(parser):
     with open(args.config_dir, "r") as f:
         model_config = yaml.safe_load(f)
 
-    # create a perception model if no pre-trained model is specified
-    if args.perception_path is None:
-        warn("No pretrained perception model is provided. Creating a new perception model...")
-        perception_config = model_config['perception_model']
-        perception_config['obs_dim'] = env.observation_space.shape[-1]
-        perception_config['vae_params']['higher_vae']['seq_len'] = n + 1
-        perception_model = PerceptionModel(**perception_config).to(args.device)
-    else:
-        perception_model = PerceptionModel.load_from_checkpoint(args.perception_path).to(args.device)
+    # create components of the BYOL-Explore agent
+    # # encoders
+    obs_dim = env.observation_space.shape[-1]
+    action_dim = env.action_space.shape[-1]
+    latent_dim = model_config['encoders']['latent_dim']
+    online_encoder, target_encoder, actor_encoder, critic_encoder = [byolex.ObservationEncoder(obs_dim, **model_config['encoders']) for _ in range(4)]
+    
+    # # actor critic
+    actor_critic = byolex.ActorCritic(actor_encoder, critic_encoder, action_dim, **model_config['actor_critic'])
+    
+    # # world model
+    world_model = byolex.WorldModel(latent_dim, action_dim, **model_config['world_model'])
 
-    # create the actor
-    action_config = model_config['action_model']
-    if args.action_strategy == "bas":
-        actor = ActionNetworkStrategy(perception_model, layers=action_config['layers'],
-                                      lr=action_config['lr'],
-                                      out_dist='gaussian',
-                                      action_std=action_config['action_std'])
-    elif args.action_strategy == "random":
-        actor = RandomActionStrategy(perception_model)  # for random action strategy
-    else:
-        raise parser.error(message="Invalid action strategy. Valid input can be one of "
-                                   "['bas', 'random']")
-
-    # create the deciders
+    # # decider
     decision_config = model_config['decision_model']
     if args.decision_strategy == "rnn":
         decider = RNNDecisionNetwork(env.observation_space.shape[-1] + env.action_space.shape[-1],
@@ -113,37 +96,28 @@ def main(parser):
                                         seq_len=n + 1,
                                         layers=decision_config['layers'],
                                         num_classes=env.num_classes).to(args.device)
-    elif args.decision_strategy == "perception":
-        decider = FFDecisionNetwork(perception_model.s_dim,
-                                    decision_config['layers'],
-                                    env.num_classes,
-                                    lr=decision_config['lr']).to(args.device)
     else:
         raise parser.error(message="Invalid decision strategy. Valid input can be one of "
-                                   "['rnn', 'concat', 'perception']")
+                                   "['rnn', 'concat']")
 
     # logging and checkpointing directory
     # experiment name
-    exp_name = f"{args.action_strategy}_{args.decision_strategy}_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{seed}" if args.exp_name is None else args.exp_name
+    exp_name = f"BYOLEX_{args.decision_strategy}_n={n}_d={d}_nfov={nfov}_fovsc={fovsc}_{seed}" if args.exp_name is None else args.exp_name
     # log dir
     log_dir = os.path.join(args.log_dir, args.env_name, exp_name)
 
     # build the active sensor model
-    active_sensor = BayesianActiveSensor(env, perception_model, actor, decider,
-                                         log_dir=log_dir, checkpoint_dir=log_dir,
-                                         e2e_finetuning=args.finetune_e2e,
-                                         device=args.device, decider_input=args.decision_strategy)
+    byol_ppo = byolex.BYOLActiveSensor(env, online_encoder, target_encoder, actor_critic, world_model, decider,
+                                       config=model_config['agent'], log_dir=log_dir, device=args.device).to(args.device)
 
     if args.load_model is not None:
         active_sensor.load_from_checkpoint_dict(torch.load(args.load_model))
 
     # train
-    beta_sched = args.beta * np.ones((args.num_epochs,))
-    active_sensor.learn(start_epoch=args.start_epoch,
-                        num_epochs=args.num_epochs,
-                        beta_sched=beta_sched,
-                        num_random_epochs=args.num_warmup_epochs,
-                        validate_every=args.validate_every)
+    byol_ppo.learn(start_epoch=args.start_epoch,
+                   num_epochs=args.num_epochs,
+                   num_random_epochs=args.num_warmup_epochs,
+                   validate_every=args.validate_every)
 
 
 if __name__ == "__main__":
