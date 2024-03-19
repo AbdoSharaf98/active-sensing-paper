@@ -92,9 +92,6 @@ class World(gym.Env, ABC):
 
         # return
         return self.current_state, 0.0, False, {}
-    
-    def seed(self, seed=None):
-        super(World, self).seed(seed)
 
 
 class DenseWorld(World, ABC):
