@@ -49,7 +49,7 @@ setup (even with different Python versions).
 
 First, create a conda environment by running:
 
-    conda env create -n active-sensing
+    conda create -n active-sensing
 
 Then, activate it by running:
 
