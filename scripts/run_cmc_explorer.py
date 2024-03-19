@@ -51,7 +51,6 @@ def main(args):
     # set seed
     np.random.seed(seed)
     torch.manual_seed(seed)
-    env.seed(seed)
 
     # learning rate scheduler
     lr_sched = lambda optim: ExponentialLR(optim, gamma=args.lr_gamma)
