@@ -31,7 +31,7 @@ class CMCExplorer(nn.Module):
                  action_lr=0.05,
                  tau=0.2,
                  beta_action=1.0,
-                 beta_perception=0.001,
+                 beta_perception=1e-5,
                  lr_scheduler=None,
                  info_objective=None,
                  device='cuda'):
