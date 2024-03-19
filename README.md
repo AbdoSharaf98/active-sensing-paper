@@ -51,7 +51,7 @@ setup (even with different Python versions).
 
 First, create a conda environment by running:
 
-    conda create -n active-sensing
+    conda create -n active-sensing python=3.9
 
 Then, activate it by running:
 
