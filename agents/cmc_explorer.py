@@ -284,11 +284,9 @@ class CMCExplorer(nn.Module):
                 missing_infos.append(missing_info.item())
                 visited.append(100 * visited_pairs / (self.num_states * self.num_actions))
                 if verbose:
-                    print(f"{prefix} \t Step {global_step}: Loss = {loss},"
-                          f"\t KL = {kl}"
-                          f" \tMissing Info = {missing_info}"
+                    print(f"{prefix} \t Step {global_step}: Missing Info = {missing_info}"
                           f" \tVisited = {visited_pairs}/{(self.num_states * self.num_actions)}", end='\r')
-
+                    
             state = next_state
             global_step = global_step + 1
 
