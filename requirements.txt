@@ -5,7 +5,6 @@ numpy>=1.23.3
 scipy>=1.9.1
 torchvision>=0.13.1+cu116
 matplotlib>=3.6.0
-sklearn>=0.0.post2
 scikit-learn>=1.2.1
 functorch>=0.2.1
 scienceplots>=2.0.1
