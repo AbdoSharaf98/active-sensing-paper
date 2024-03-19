@@ -15,12 +15,12 @@ import yaml
 def get_arg_parser():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--log_dir", type=str, default="../runs/perception_pretraining")
+    parser.add_argument("--log_dir", type=str, default="./runs/perception_pretraining")
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=412)
-    parser.add_argument("--config_dir", type=str, default="../configs/bas.yaml")
-    parser.add_argument("--env_config_dir", type=str, default="../configs/envs.yaml")
-    parser.add_argument("--env_name", type=str, default="cluttered_mnist")
+    parser.add_argument("--config_dir", type=str, default="./configs/bas.yaml")
+    parser.add_argument("--env_config_dir", type=str, default="./configs/envs.yaml")
+    parser.add_argument("--env_name", type=str, default="mnist")
     parser.add_argument("--discrete_action", action="store_true")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--num_epochs", type=int, default=50)
