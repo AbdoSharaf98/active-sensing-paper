@@ -13,7 +13,7 @@ In this paper, we developed an end-to-end perception-action framework for embodi
 
 ![](fx1_lrg.jpg)
 
-**Graphical Abstract** *Generative models and architectures for the active exploration agents in CMCs and active vision. In both cases, the perception model aims to optimize the ELBO of a generative model that reflects the nature of the task, while the action model selects actions in an intrinsically-motivated manner to minimize the uncertainty of the perception model.*
+**Graphical Abstract.** *Generative models and architectures for the active exploration agents in CMCs and active vision. In both cases, the perception model aims to optimize the ELBO of a generative model that reflects the nature of the task, while the action model selects actions in an intrinsically-motivated manner to minimize the uncertainty of the perception model.*
 
 
 ## Abstract
