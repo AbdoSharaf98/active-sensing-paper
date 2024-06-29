@@ -7,7 +7,7 @@ and Hannah Choi.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10837552.svg)](https://doi.org/10.5281/zenodo.10837552)
 
-This repository is the official implementation of the paper [Active Sensing with Predictive Coding and Uncertainty Minimization]([https://arxiv.org/abs/2307.00668](https://www.cell.com/patterns/fulltext/S2666-3899(24)00097-7)).
+This repository is the official implementation of our Patterns paper [Active Sensing with Predictive Coding and Uncertainty Minimization]([(https://www.cell.com/patterns/fulltext/S2666-3899(24)00097-7)]).
 
 In this paper, we developed an end-to-end perception-action framework for embodied exploration based on two theories from computational neuroscience: predictive coding for perception and uncertainty minimization for action. We apply this framework to two exploration settings: discrete-action Controllable Markov Chains (CMCs), and continuous-action active vision tasks. 
 
